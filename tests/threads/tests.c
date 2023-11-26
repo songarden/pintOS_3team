@@ -95,7 +95,7 @@ fail (const char *format, ...)
 
 /* Prints a message indicating the current test passed. */
 void
-pass (void) 
+pass (void)
 {
   printf ("(%s) PASS\n", test_name);
 }
