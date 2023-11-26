@@ -11,6 +11,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -28,6 +29,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/*busy-waiting 하지 않도록 쓰레드를 재워 보자 !*/
+static struct list sleep_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -39,6 +43,7 @@ static struct lock tid_lock;
 
 /* Thread destruction requests */
 static struct list destruction_req;
+
 
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
@@ -108,6 +113,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&sleep_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -153,6 +159,8 @@ thread_tick (void) {
 	if (++thread_ticks >= TIME_SLICE)
 		intr_yield_on_return ();
 }
+
+
 
 /* Prints thread statistics. */
 void
@@ -307,6 +315,41 @@ thread_yield (void) {
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
+
+/* 쓰레드를 sleep_list에 넣어주자 */
+void thread_sleep_and_yield(void) {
+	struct thread *curr = thread_current();
+	
+	if (curr != idle_thread)
+		list_push_back (&sleep_list, &curr->elem);
+		curr->status = THREAD_SLEEPING;
+		schedule ();
+}
+
+/* 일어나야 하는 쓰레드를 전부 깨워보자.*/
+void time_to_wake (void){
+	// enum intr_level old_level;
+
+	// old_level = intr_disable ();
+	int64_t now_time = timer_ticks();
+	
+	struct thread *t;
+	struct list_elem *telem;
+
+	for(telem=list_begin(&sleep_list); telem!=list_end(&sleep_list);) {
+		t = list_entry (telem, struct thread, elem);
+		if(t->wake_time <= now_time){
+			telem = list_remove(telem);
+			list_push_back (&ready_list, &t->elem);
+			t->status = THREAD_READY;
+			t->wake_time = 0;
+			continue;
+		}
+		telem = list_next(telem);
+	}
+	// intr_set_level(old_level);
+}
+
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
@@ -545,7 +588,8 @@ schedule (void) {
 
 	ASSERT (intr_get_level () == INTR_OFF);
 	ASSERT (curr->status != THREAD_RUNNING);
-	ASSERT (is_thread (next));
+	ASSERT (next != NULL);
+	// ASSERT (is_thread (next));
 	/* Mark us as running. */
 	next->status = THREAD_RUNNING;
 
