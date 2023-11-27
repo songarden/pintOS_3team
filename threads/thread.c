@@ -64,12 +64,6 @@ static void kernel_thread (thread_func *, void *aux);
 static bool thread_less (const struct list_elem *a_, const struct list_elem *b_,
             void *aux UNUSED);
 
-static bool thread_more_priority(const struct list_elem *a_, const struct list_elem *b_,
-            void *aux UNUSED);
-
-static void list_sort_high_priority (struct list *list);
-static void check_running_priority(void);
-
 static void idle (void *aux UNUSED);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
@@ -521,7 +515,7 @@ void list_sort_high_priority (struct list *list) {
 }
 
 /* ready_list를 높은 우선순위 순으로 정렬하는 bool 함수 */
-static bool
+bool
 thread_more_priority (const struct list_elem *a_, const struct list_elem *b_,
             void *aux UNUSED) 
 {
