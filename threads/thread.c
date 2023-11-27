@@ -49,6 +49,7 @@ static struct list destruction_req;
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
+static int64_t min_wake_ticks = INT64_MAX;    /* # of timer ticks in sleeping threads. */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
@@ -60,6 +61,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
+static bool thread_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED);
 
 static void idle (void *aux UNUSED);
 static struct thread *next_thread_to_run (void);
@@ -321,18 +324,31 @@ void thread_sleep_and_yield(void) {
 	struct thread *curr = thread_current();
 	
 	if (curr != idle_thread)
-		list_push_back (&sleep_list, &curr->elem);
+		list_insert_ordered(&sleep_list,&curr->elem,thread_less,NULL);
+		if (list_begin(&sleep_list) == &curr->elem){
+			min_wake_ticks = curr->wake_time;
+		}
 		curr->status = THREAD_SLEEPING;
 		schedule ();
 }
 
+static bool
+thread_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->wake_time < b->wake_time;
+}
+
 /* 일어나야 하는 쓰레드를 전부 깨워보자.*/
 void time_to_wake (void){
-	// enum intr_level old_level;
-
-	// old_level = intr_disable ();
 	int64_t now_time = timer_ticks();
-	
+	if (min_wake_ticks > timer_ticks){
+		return;
+	}
+
 	struct thread *t;
 	struct list_elem *telem;
 
@@ -343,11 +359,15 @@ void time_to_wake (void){
 			list_push_back (&ready_list, &t->elem);
 			t->status = THREAD_READY;
 			t->wake_time = 0;
-			continue;
 		}
-		telem = list_next(telem);
+		else {
+			struct list_elem *min_wake_elem = list_begin(&sleep_list);
+			struct thread *min_wake_thread = list_entry(min_wake_elem, struct thread, elem);
+			min_wake_ticks = min_wake_thread->wake_time;
+			break;
+		}
+		
 	}
-	// intr_set_level(old_level);
 }
 
 
