@@ -148,6 +148,15 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 
 	//타이머 인터럽트가 발생할 때마다 현재 시간을 확인
 	int64_t current_time = timer_ticks();
+
+	// 대기 리스트의 첫번째 원소 반환
+	struct list_elem *e = list_begin(&sleep_list);
+
+	//대기 리스트를 순회
+    while (e != list_end(&sleep_list)) {
+		struct thread *t = list_entry(e, struct thread, elem);
+
+    }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
