@@ -95,8 +95,10 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
-	// 깨어날 시간을 저장하는 필드
+	// 깨어날 시간을 저장하는 변수
 	int64_t wake_up_time;  
+	// 리스트 요소를 추가
+	struct list_elem elem; 
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
