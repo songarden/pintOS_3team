@@ -64,9 +64,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
-static bool
-_less (const struct list_elem *a_, const struct list_elem *b_,
-            void *aux UNUSED);
+static bool sorting (const struct list_elem *a_, const struct list_elem *b_, void* aux);
+static int sort_fixed_value = 1;
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
@@ -276,13 +275,14 @@ thread_block (void) {
 }
 
 static bool
-_less (const struct list_elem *a_, const struct list_elem *b_,
-            void *aux UNUSED) 
+sorting (const struct list_elem *a_, const struct list_elem *b_,
+            void* aux) 
 {
   const struct thread *a = list_entry (a_, struct thread, elem);
   const struct thread *b = list_entry (b_, struct thread, elem);
   
-  return a->for_ticks < b->for_ticks;
+  if(aux) return a->for_ticks < b->for_ticks;
+  else return a->for_ticks > b->for_ticks;
 }
 
 void blocking_for_ticks(int64_t ticks){
@@ -290,7 +290,7 @@ void blocking_for_ticks(int64_t ticks){
 	ASSERT (!intr_context ());
 	ASSERT(cur != idle_thread);
 	cur->for_ticks = ticks;
-	list_insert_ordered(&blocked_list, &cur->elem, _less, NULL);
+	list_insert_ordered(&blocked_list, &cur->elem, sorting, sort_fixed_value);
 	thread_block();
 }
 
@@ -412,6 +412,9 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+
+	struct thread* next = list_entry(list_begin(&ready_list), struct thread, elem);
+	if(next->priority > new_priority) next_thread_to_run();
 }
 
 /* Returns the current thread's priority. */
