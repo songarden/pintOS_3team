@@ -90,13 +90,17 @@ timer_elapsed (int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
+	if (ticks <= 0){
+		return;
+	}
 	int64_t start = timer_ticks ();
+	ASSERT (intr_get_level () == INTR_ON);
 	enum intr_level old_level;
 
 	old_level = intr_disable ();
 	struct thread *t = thread_current ();
 	t->wake_time = ticks + start;
-	// ASSERT (intr_get_level () == INTR_ON);
+	
 	// while (timer_elapsed (start) < ticks)
 	thread_sleep_and_yield();
 	intr_set_level (old_level);
