@@ -111,6 +111,9 @@ timer_sleep (int64_t ticks) {
     intr_set_level(old_level);
 
     // 스레드를 대기 상태로 전환하는 코드
+	// 현재 스레드를 BLOCKED 상태로 전환
+	thread_block();  
+
 }
 
 /* Suspends execution for approximately MS milliseconds. */
