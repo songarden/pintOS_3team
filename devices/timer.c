@@ -101,6 +101,14 @@ timer_sleep (int64_t ticks) {
 	// 	thread_yield ();
 
 	// 스레드를 대기 리스트에 추가하는 코드
+	// 1. 현재 스레드의 wake_up_time 설정
+	struct thread *current = thread_current();
+    current->wake_up_time = wake_up_time;
+
+	// 2. 대기 리스트에 현재 스레드 추가
+    enum intr_level old_level = intr_disable();
+    list_push_back(&sleep_list, &current->elem);
+    intr_set_level(old_level);
 
     // 스레드를 대기 상태로 전환하는 코드
 }
