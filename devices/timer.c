@@ -145,6 +145,9 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+
+	//타이머 인터럽트가 발생할 때마다 현재 시간을 확인
+	int64_t current_time = timer_ticks();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
