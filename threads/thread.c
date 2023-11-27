@@ -64,6 +64,12 @@ static void kernel_thread (thread_func *, void *aux);
 static bool thread_less (const struct list_elem *a_, const struct list_elem *b_,
             void *aux UNUSED);
 
+static bool thread_more_priority(const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED);
+
+static void list_sort_high_priority (struct list *list);
+static void check_running_priority(void);
+
 static void idle (void *aux UNUSED);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
@@ -217,6 +223,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+	check_running_priority();
 
 	return tid;
 }
@@ -251,10 +258,22 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	list_insert_ordered(&ready_list,&t->elem,thread_more_priority,NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
+
+void check_running_priority(void){
+	if (list_empty(&ready_list) == true)
+		return;
+	struct thread *curr = running_thread();
+	struct thread *ready_head = list_entry(list_begin(&ready_list),struct thread,elem);
+	if(curr->priority < ready_head->priority) {
+		thread_yield();
+	}
+}
+
+
 
 /* Returns the name of the running thread. */
 const char *
@@ -314,7 +333,7 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered (&ready_list, &curr->elem,thread_more_priority,NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -348,7 +367,6 @@ void time_to_wake (void){
 	if (min_wake_ticks > timer_ticks){
 		return;
 	}
-
 	struct thread *t;
 	struct list_elem *telem;
 
@@ -356,17 +374,17 @@ void time_to_wake (void){
 		t = list_entry (telem, struct thread, elem);
 		if(t->wake_time <= now_time){
 			telem = list_remove(telem);
-			list_push_back (&ready_list, &t->elem);
+			list_insert_ordered(&ready_list,&t->elem,thread_more_priority,NULL);
 			t->status = THREAD_READY;
 			t->wake_time = 0;
 		}
 		else {
+			check_running_priority();
 			struct list_elem *min_wake_elem = list_begin(&sleep_list);
 			struct thread *min_wake_thread = list_entry(min_wake_elem, struct thread, elem);
 			min_wake_ticks = min_wake_thread->wake_time;
 			break;
 		}
-		
 	}
 }
 
@@ -375,6 +393,7 @@ void time_to_wake (void){
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	check_running_priority();
 }
 
 /* Returns the current thread's priority. */
@@ -479,13 +498,35 @@ init_thread (struct thread *t, const char *name, int priority) {
    empty.  (If the running thread can continue running, then it
    will be in the run queue.)  If the run queue is empty, return
    idle_thread. */
+
+
 static struct thread *
 next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
-	else
+	else {
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
+	}
 }
+
+void list_sort_high_priority (struct list *list) {
+	list_sort(list,thread_more_priority,NULL);
+	return;
+}
+
+/* ready_list를 높은 우선순위 순으로 정렬하는 bool 함수 */
+static bool
+thread_more_priority (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority > b->priority;
+}
+
+
+
 
 /* Use iretq to launch the thread */
 void
