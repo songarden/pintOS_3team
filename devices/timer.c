@@ -155,7 +155,12 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	//대기 리스트를 순회
     while (e != list_end(&sleep_list)) {
 		struct thread *t = list_entry(e, struct thread, elem);
-
+		if (current_time >= t->wake_up_time) {
+            e = list_remove(e); // 리스트에서 제거
+            thread_unblock(t);  // 스레드를 READY 상태로 변경
+        } else {
+            e = list_next(e);
+        }
     }
 }
 
