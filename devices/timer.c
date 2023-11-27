@@ -90,11 +90,19 @@ timer_elapsed (int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
+	//현재 시간 계산
 	int64_t start = timer_ticks ();
 
+	//스레드가 깨어나야 할 시간 계산
+	int64_t wake_up_time = start + ticks;
+
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	// while (timer_elapsed (start) < ticks)
+	// 	thread_yield ();
+
+	// 스레드를 대기 리스트에 추가하는 코드
+
+    // 스레드를 대기 상태로 전환하는 코드
 }
 
 /* Suspends execution for approximately MS milliseconds. */
