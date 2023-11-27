@@ -143,4 +143,7 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+// 대기 리스트 전역 변수 선언
+extern struct list sleep_list;  
+
 #endif /* threads/thread.h */
