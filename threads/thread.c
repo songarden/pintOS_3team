@@ -264,13 +264,20 @@ thread_unblock (struct thread *t) {
 }
 
 void check_running_priority(void){
+	enum intr_level old_level;
+	
 	if (list_empty(&ready_list) == true)
 		return;
+
+	old_level = intr_disable ();
 	struct thread *curr = running_thread();
 	struct thread *ready_head = list_entry(list_begin(&ready_list),struct thread,elem);
 	if(curr->priority < ready_head->priority) {
-		thread_yield();
+		list_insert_ordered(&ready_list,&curr->elem,thread_more_priority,NULL);
+		curr->status = THREAD_READY;
+		schedule();
 	}
+	intr_set_level (old_level);
 }
 
 
@@ -379,7 +386,6 @@ void time_to_wake (void){
 			t->wake_time = 0;
 		}
 		else {
-			check_running_priority();
 			struct list_elem *min_wake_elem = list_begin(&sleep_list);
 			struct thread *min_wake_thread = list_entry(min_wake_elem, struct thread, elem);
 			min_wake_ticks = min_wake_thread->wake_time;
