@@ -1,0 +1,16 @@
+{
+    "files.associations": {
+        "vm.h": "c",
+        "stdio.h": "c",
+        "random.h": "c",
+        "list.h": "c",
+        "stddef.h": "c",
+        "debug.h": "c",
+        "flags.h": "c",
+        "vaddr.h": "c",
+        "string.h": "c",
+        "intrinsic.h": "c",
+        "thread.h": "c",
+        "synch.h": "c"
+    }
+}

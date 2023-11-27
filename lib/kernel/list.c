@@ -31,6 +31,8 @@
    elements allows us to do a little bit of checking on some
    operations, which can be valuable.) */
 
+
+
 static bool is_sorted (struct list_elem *a, struct list_elem *b,
 		list_less_func *less, void *aux) UNUSED;
 

@@ -42,6 +42,7 @@ timer_init (void) {
 	outb (0x40, count & 0xff);
 	outb (0x40, count >> 8);
 
+	// 타이머 인터럽트를 실행함. timer_interrupt함수에서 ticks++ 을 하면서 증가. 타이머 인터럽트는 1초에 100번 발생
 	intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
 
@@ -55,6 +56,7 @@ timer_calibrate (void) {
 
 	/* Approximate loops_per_tick as the largest power-of-two
 	   still less than one timer tick. */
+	// 한틱 내에 루프가 얼마나 돌 수 있는지 근사치를 구함.
 	loops_per_tick = 1u << 10;
 	while (!too_many_loops (loops_per_tick << 1)) {
 		loops_per_tick <<= 1;
@@ -62,6 +64,7 @@ timer_calibrate (void) {
 	}
 
 	/* Refine the next 8 bits of loops_per_tick. */
+	// 근사치에서 더 근사치를 구함.
 	high_bit = loops_per_tick;
 	for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
 		if (!too_many_loops (high_bit | test_bit))
@@ -71,10 +74,13 @@ timer_calibrate (void) {
 }
 
 /* Returns the number of timer ticks since the OS booted. */
+// 운영 체제가 부팅된 이후부터 현재까지의 타이머 틱 수를 반환한다.
 int64_t
 timer_ticks (void) {
+	// 인터럽트를 비활성화하고 현재 인터럽트 레벨을 반환 받는다.
 	enum intr_level old_level = intr_disable ();
 	int64_t t = ticks;
+	//활성화
 	intr_set_level (old_level);
 	barrier ();
 	return t;
@@ -82,6 +88,7 @@ timer_ticks (void) {
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
+// 타이머 틱스(timer_ticks())에 의해 한 번 반환된 값이 THEN 이후로 경과한 타이머 틱의 수를 반환한다.
 int64_t
 timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
@@ -93,8 +100,11 @@ timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	// while (timer_elapsed (start) < ticks)
+	// 	thread_yield ();
+	enum intr_level old_level = intr_disable ();
+	blocking_for_ticks(start+ticks);
+	intr_set_level (old_level);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -120,11 +130,12 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
+	thread_ticks_end();
 	thread_tick ();
 }
 
@@ -136,13 +147,17 @@ too_many_loops (unsigned loops) {
 	int64_t start = ticks;
 	while (ticks == start)
 		barrier ();
-
+	// 타이머 인터럽트가 발생할 때 까지 대기.
 	/* Run LOOPS loops. */
 	start = ticks;
+
+	// 루프 횟수가 다 돌때까지 대기
 	busy_wait (loops);
 
 	/* If the tick count changed, we iterated too long. */
 	barrier ();
+
+	// busy_wait 루프 횟수가 끝난 후에 ticks의 값과 ticks가 1 증가 할 때. 즉, 타이머 인터럽트가 1번 발생할때의 ticks 값과 같으면 횟수가 다음 타이머 인터럽트 발생 전에 끝나는지 확인.
 	return start != ticks;
 }
 
@@ -160,6 +175,8 @@ busy_wait (int64_t loops) {
 }
 
 /* Sleep for approximately NUM/DENOM seconds. */
+// 대략 NUM/DENOM 초 동안 대기한다.
+// 지정된 시간 동안 현재 스레드 또는 프로세스의 실행을 일시 중지시키는 역할
 static void
 real_time_sleep (int64_t num, int32_t denom) {
 	/* Convert NUM/DENOM seconds into timer ticks, rounding down.
