@@ -108,11 +108,13 @@ timer_sleep (int64_t ticks) {
 	// 2. 대기 리스트에 현재 스레드 추가
     enum intr_level old_level = intr_disable();
     list_push_back(&sleep_list, &current->elem);
-    intr_set_level(old_level);
+
 
     // 스레드를 대기 상태로 전환하는 코드
 	// 현재 스레드를 BLOCKED 상태로 전환
 	thread_block();  
+
+	intr_set_level(old_level);
 
 }
 
