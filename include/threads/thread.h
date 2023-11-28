@@ -152,9 +152,6 @@ extern struct list sleep_list;
 // 리스트의 원소 스레드들 간에 우선순위를 비교하는 함수
 bool thread_priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
 
-// 준비 리스트를 우선순위 순으로 재정렬 하는 함수
-void reorder_ready_list(void);
-
 // 현재 CPU를 점유하고 있는 스레드의 우선순위가 낮을 시 양보하는 함수
 void thread_check_reschedule(void)
 
