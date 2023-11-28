@@ -174,8 +174,9 @@ thread_tick (void) {
 	/* Enforce preemption. 
 	틱을 증가시켜 선점후 틱 값이 TIME_SLICE(스레드에 할당단 최대 실행 시간)을 초과하면 중단하고 yield를 시킴.
 	*/
-	if (++thread_ticks >= TIME_SLICE)
-		intr_yield_on_return ();
+	thread_ticks++;
+	// if (++thread_ticks >= TIME_SLICE);
+	// 	intr_yield_on_return ();
 }
 
 /* Prints thread statistics. 
@@ -249,7 +250,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-
+	if(t->priority > thread_current()->priority) thread_yield();
 	return tid;
 }
 
@@ -305,7 +306,7 @@ void blocking_for_ticks(int64_t ticks){
    차단된 스레드 T를 준비-실행 상태로 전환합니다. T가 차단 상태가 아니라면 이는 오류입니다.
    (실행 중인 스레드를 준비 상태로 만들려면 thread_yield()를 사용하세요.)
 
-   이 함수는 실행 중인 스레드를 선점하지 않ㅁ습니다. 이는 중요할 수 있습니다: 
+   이 함수는 실행 중인 스레드를 선점하지 않습니다. 이는 중요할 수 있습니다: 
    호출자가 직접 인터럽트를 비활성화한 경우, 스레드를 원자적으로 차단 해제하고 
    다른 데이터를 업데이트할 수 있기를 기대할 수 있습니다.
    */
@@ -317,7 +318,6 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	// list_push_back (&ready_list, &t->elem);
 	if(list_empty(&ready_list))	list_push_back (&ready_list, &t->elem);
 	else list_insert_ordered(&ready_list, &t->elem, sorting_priority, (void*)1);
 	t->status = THREAD_READY;
@@ -424,12 +424,10 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
-	enum intr_level old_level = intr_disable ();
 	struct thread* next = list_entry(list_begin(&ready_list), struct thread, elem);
 	if(next->priority > new_priority) {
 		thread_yield();
 	}
-	intr_set_level (old_level);
 }
 
 /* Returns the current thread's priority. */
