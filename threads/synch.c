@@ -194,12 +194,30 @@ lock_init (struct lock *lock) {
    we need to sleep. */
 void
 lock_acquire (struct lock *lock) {
+	struct thread *curr = thread_current ();
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
+	enum intr_level old_level;
+
+	old_level = intr_disable ();
+	if (lock->semaphore.value == 0){
+		curr->wait_on_lock = lock;
+		priority_donation(lock->holder , curr);
+	}
+	intr_set_level (old_level);
 
 	sema_down (&lock->semaphore);
 	lock->holder = thread_current ();
+}
+
+void priority_donation(struct thread *lock_holder, struct thread *donater_thread){
+	list_insert_ordered(&lock_holder->donation_list,&donater_thread->donate_elem,thread_more_lock_priority,NULL);
+	refresh_priority(lock_holder);
+	if (lock_holder->status == THREAD_BLOCKED){
+		struct thread *high_holder = lock_holder->wait_on_lock->holder;
+		priority_donation(high_holder,lock_holder);
+	}
 }
 
 
@@ -236,11 +254,55 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	remove_with_lock(lock);
+	refresh_priority(curr);
 	
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
+	// check_running_priority();
 }
 
+/* 해당 락을 풀기 전에 해당 락을 기다리는 쓰레드들을 기억하는 리스트에서 해당 락을 기다리는 쓰레드들 제거*/
+void remove_with_lock(struct lock *lock) {
+	struct thread *curr = thread_current ();
+
+	if (list_empty(&curr->donation_list)){
+		return;
+	}
+
+	struct list_elem *wait_elem;
+
+	for(wait_elem = list_begin(&curr->donation_list); wait_elem != list_end(&curr->donation_list);){
+		struct thread *thread_wait = list_entry(wait_elem,struct thread,donate_elem);
+		if(thread_wait->wait_on_lock == lock){
+			wait_elem = list_remove(wait_elem);
+		}
+		else{
+			wait_elem = wait_elem->next;
+		}
+	}
+}
+
+/*     <우선순위 갱신 상황>  
+ * 1. 락을 보유중인 쓰레드가 set_priority에 의해 real_priority가 변경되었을 때.
+ * 2. 락을 풀면서 기증받은 쓰레드가 기다리지 않게 되었을 때.
+ * 3. 락을 아예 소지하고 있지 않아서 real_priority로 되돌아와야 할 때.
+ * 
+ */
+void refresh_priority(struct thread *refreshed_thread){
+	if(list_empty(&refreshed_thread->donation_list)){
+		refreshed_thread->priority = refreshed_thread->real_priority;
+		return;
+	}
+	struct thread *priority_thread = list_entry(list_begin(&refreshed_thread->donation_list),
+				struct thread,donate_elem);
+	if (refreshed_thread->real_priority >= priority_thread->priority) {
+		refreshed_thread->priority = refreshed_thread->real_priority;
+	}
+	else{
+		refreshed_thread->priority = priority_thread->priority;
+	}
+}
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
@@ -298,7 +360,7 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_insert_ordered (&cond->waiters, &waiter.elem, sema_more_priority, NULL);
+	list_insert_ordered (&cond->waiters, &waiter.elem, thread_more_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);

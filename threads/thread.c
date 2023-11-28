@@ -159,8 +159,8 @@ thread_tick (void) {
 		kernel_ticks++;
 
 	/* Enforce preemption. */
-	if (++thread_ticks >= TIME_SLICE)
-		intr_yield_on_return ();
+	// if (++thread_ticks >= TIME_SLICE)
+	// 	intr_yield_on_return ();
 }
 
 
@@ -215,6 +215,7 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	
 	/* Add to run queue. */
 	thread_unblock (t);
 	check_running_priority();
@@ -392,7 +393,10 @@ void time_to_wake (void){
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	struct thread *curr = thread_current();
+	curr->priority = new_priority;
+	curr->real_priority = new_priority;
+	refresh_priority(curr);
 	check_running_priority();
 }
 
@@ -491,6 +495,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	t->real_priority = priority;
+	list_init(&t->donation_list);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -521,6 +527,17 @@ thread_more_priority (const struct list_elem *a_, const struct list_elem *b_,
 {
   const struct thread *a = list_entry (a_, struct thread, elem);
   const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority > b->priority;
+}
+
+/* ready_list를 높은 우선순위 순으로 정렬하는 bool 함수 */
+bool
+thread_more_lock_priority (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, donate_elem);
+  const struct thread *b = list_entry (b_, struct thread, donate_elem);
   
   return a->priority > b->priority;
 }
