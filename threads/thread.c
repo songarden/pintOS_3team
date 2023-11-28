@@ -339,7 +339,31 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+
+	// 현재 우선순위를 설정
 	thread_current ()->priority = new_priority;
+
+	//read_list를 우선순위에 따라 재정렬
+	reorder_ready_list();
+
+	//스케줄을 재조정
+	thread_check_reschedule();
+}
+
+/* 준비 리스트를 우선순위에 따라 재정렬하는 함수 */
+void reorder_ready_list(void) {
+    list_sort(&ready_list, thread_priority_compare, NULL);
+}
+
+// 현재 CPU를 점유하고 있는 스레드의 우선순위보다 ready_list에 있는 스레드의 우선순위가 높은 경우
+// 양보하고 스케줄러에게 제어를 넘김
+void thread_check_reschedule(void) {
+    struct thread *current = thread_current();
+    struct thread *next = list_entry(list_begin(&ready_list), struct thread, elem);
+
+    if (current->priority < next->priority) {
+        thread_yield();
+    }
 }
 
 /* Returns the current thread's priority. */
