@@ -327,7 +327,11 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		// 기존에 대기 리스트의 맨 뒤로 보내는 로직을 비활성화
+		//list_push_back (&ready_list, &curr->elem);
+
+		// 현재 스레드가 CPU를 양보하고, 준비 리스트에서 우선순위를 기준으로 삽입
+		list_insert_ordered(&ready_list, &curr->elem, thread_priority_compare, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
