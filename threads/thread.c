@@ -246,9 +246,27 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+
+	// 기존 언블록 로직 비활성화
+	// list_push_back (&ready_list, &t->elem);
+
+	// 차단상태의 스레드를 준비 상태로 전환하고, 우선순위를 기준으로 삽입
+	list_insert_ordered(&ready_list, &t->elem, thread_priority_compare, NULL);
+
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
+}
+
+/*우선순위 비교 함수
+ * 리스트의 요소 중 2개를 인자로 전달받은 후
+ * 그 스레드의 priority 필드를 비교
+ * a가 크면 True, b가 크거나 같으면 False를 반환
+ */
+bool thread_priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+    const struct thread *t1 = list_entry(a, struct thread, elem);
+    const struct thread *t2 = list_entry(b, struct thread, elem);
+
+    return t1->priority > t2->priority;
 }
 
 /* Returns the name of the running thread. */
