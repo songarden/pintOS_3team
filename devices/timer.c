@@ -90,11 +90,32 @@ timer_elapsed (int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
+	//현재 시간 계산
 	int64_t start = timer_ticks ();
 
+	//스레드가 깨어나야 할 시간 계산
+	int64_t wake_up_time = start + ticks;
+
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	// while (timer_elapsed (start) < ticks)
+	// 	thread_yield ();
+
+	// 스레드를 대기 리스트에 추가하는 코드
+	// 1. 현재 스레드의 wake_up_time 설정
+	struct thread *current = thread_current();
+    current->wake_up_time = wake_up_time;
+
+	// 2. 대기 리스트에 현재 스레드 추가
+    enum intr_level old_level = intr_disable();
+    list_push_back(&sleep_list, &current->elem);
+
+
+    // 스레드를 대기 상태로 전환하는 코드
+	// 현재 스레드를 BLOCKED 상태로 전환
+	thread_block();  
+
+	intr_set_level(old_level);
+
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -126,6 +147,23 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+
+	//타이머 인터럽트가 발생할 때마다 현재 시간을 확인
+	int64_t current_time = timer_ticks();
+
+	// 대기 리스트의 첫번째 원소 반환
+	struct list_elem *e = list_begin(&sleep_list);
+
+	//대기 리스트를 순회
+    while (e != list_end(&sleep_list)) {
+		struct thread *t = list_entry(e, struct thread, elem);
+		if (current_time >= t->wake_up_time) {
+            e = list_remove(e); // 리스트에서 제거
+            thread_unblock(t);  // 스레드를 READY 상태로 변경
+        } else {
+            e = list_next(e);
+        }
+    }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
