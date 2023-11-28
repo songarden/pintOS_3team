@@ -64,7 +64,7 @@ sema_init (struct semaphore *sema, unsigned value) {
 void
 sema_down (struct semaphore *sema) {
 	enum intr_level old_level;
-
+	struct thread *curr = thread_current ();
 	ASSERT (sema != NULL);
 	ASSERT (!intr_context ());
 
@@ -203,6 +203,7 @@ lock_acquire (struct lock *lock) {
 	old_level = intr_disable ();
 	if (lock->semaphore.value == 0){
 		curr->wait_on_lock = lock;
+		list_insert_ordered(&lock->holder->donation_list,&curr->donate_elem,thread_more_lock_priority,NULL);
 		priority_donation(lock->holder , curr);
 	}
 	intr_set_level (old_level);
@@ -212,9 +213,8 @@ lock_acquire (struct lock *lock) {
 }
 
 void priority_donation(struct thread *lock_holder, struct thread *donater_thread){
-	list_insert_ordered(&lock_holder->donation_list,&donater_thread->donate_elem,thread_more_lock_priority,NULL);
 	refresh_priority(lock_holder);
-	if (lock_holder->status == THREAD_BLOCKED){
+	if (lock_holder->status == THREAD_BLOCKED && lock_holder->wait_on_lock != NULL){
 		struct thread *high_holder = lock_holder->wait_on_lock->holder;
 		priority_donation(high_holder,lock_holder);
 	}
@@ -253,13 +253,13 @@ lock_release (struct lock *lock) {
 	
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-
+	lock->holder = NULL;
 	remove_with_lock(lock);
 	refresh_priority(curr);
 	
-	lock->holder = NULL;
+	
 	sema_up (&lock->semaphore);
-	// check_running_priority();
+	check_running_priority();
 }
 
 /* 해당 락을 풀기 전에 해당 락을 기다리는 쓰레드들을 기억하는 리스트에서 해당 락을 기다리는 쓰레드들 제거*/
