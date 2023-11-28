@@ -11,6 +11,7 @@
         "string.h": "c",
         "intrinsic.h": "c",
         "thread.h": "c",
-        "synch.h": "c"
+        "synch.h": "c",
+        "interrupt.h": "c"
     }
 }

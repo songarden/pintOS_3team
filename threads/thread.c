@@ -250,7 +250,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-	if(t->priority > thread_current()->priority) thread_yield();
+	if(t->priority > thread_get_priority()) thread_yield();
 	return tid;
 }
 
@@ -276,8 +276,7 @@ thread_block (void) {
 }
 
 static bool
-sorting_ticks (const struct list_elem *a_, const struct list_elem *b_,
-            void* aux) 
+sorting_ticks (const struct list_elem* a_, const struct list_elem* b_, void* aux) 
 {
   const struct thread *a = list_entry (a_, struct thread, elem);
   const struct thread *b = list_entry (b_, struct thread, elem);
@@ -324,7 +323,7 @@ thread_unblock (struct thread *t) {
 	intr_set_level (old_level);
 }
 
-static bool sorting_priority (const struct list_elem *a_, const struct list_elem *b_, void* aux) 
+static bool sorting_priority (const struct list_elem* a_, const struct list_elem* b_, void* aux) 
 {
   const struct thread *a = list_entry (a_, struct thread, elem);
   const struct thread *b = list_entry (b_, struct thread, elem);

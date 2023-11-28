@@ -32,6 +32,32 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+bool cpm_thread_func(const struct list_elem* _a, const struct list_elem* _b, void* aux){
+	const struct thread *a = list_entry (_a, struct thread, elem);
+	const struct thread *b = list_entry (_b, struct thread, elem);
+
+	if(!aux) return a->priority < b->priority;
+	else return a->priority > b->priority;
+}
+struct semaphore_elem {
+	struct list_elem elem;              /* List element. */
+	struct semaphore semaphore;         /* This semaphore. */
+};
+ 
+bool cpm_sema_func(const struct list_elem* _a, const struct list_elem* _b, void* aux UNUSED){
+	const struct semaphore_elem* a_elem = list_entry(_a, struct semaphore_elem, elem);
+	const struct semaphore_elem* b_elem = list_entry(_b, struct semaphore_elem, elem);
+
+	const struct semaphore* sema_a = &a_elem->semaphore;
+	const struct semaphore* sema_b = &b_elem->semaphore;
+
+	const struct thread* t_a = list_entry(list_begin(&sema_a->waiters), struct thread, elem);
+	const struct thread* t_b = list_entry(list_begin(&sema_b->waiters), struct thread, elem);
+
+	return t_a->priority > t_b->priority;
+}
+
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -66,7 +92,7 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		list_insert_ordered(&sema->waiters, &thread_current()->elem, cpm_thread_func, (void*)1);
 		thread_block ();
 	}
 	sema->value--;
@@ -105,15 +131,21 @@ sema_try_down (struct semaphore *sema) {
 void
 sema_up (struct semaphore *sema) {
 	enum intr_level old_level;
-
+	bool isYield=false;
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
-		thread_unblock (list_entry (list_pop_front (&sema->waiters),
-					struct thread, elem));
+	if (!list_empty (&sema->waiters)){
+		list_sort(&sema->waiters, cpm_thread_func, (void*)1);
+		struct thread *next = list_entry(list_pop_front(&sema->waiters), struct thread, elem);
+        thread_unblock(next);
+        if (next->priority > thread_get_priority()) {
+            isYield = true;
+        }
+	}
 	sema->value++;
 	intr_set_level (old_level);
+	if(isYield) thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -150,7 +182,7 @@ sema_test_helper (void *sema_) {
 		sema_up (&sema[1]);
 	}
 }
-
+
 /* Initializes LOCK.  A lock can be held by at most a single
    thread at any given time.  Our locks are not "recursive", that
    is, it is an error for the thread currently holding a lock to
@@ -235,12 +267,7 @@ lock_held_by_current_thread (const struct lock *lock) {
 
 	return lock->holder == thread_current ();
 }
-
-/* One semaphore in a list. */
-struct semaphore_elem {
-	struct list_elem elem;              /* List element. */
-	struct semaphore semaphore;         /* This semaphore. */
-};
+
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -282,7 +309,8 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	// list_push_back (&cond->waiters, &waiter.elem);
+	list_insert_ordered(&cond->waiters, &waiter.elem, cpm_sema_func, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -302,9 +330,13 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
-		sema_up (&list_entry (list_pop_front (&cond->waiters),
-					struct semaphore_elem, elem)->semaphore);
+	if (!list_empty (&cond->waiters)){
+		list_sort(&cond->waiters, cpm_sema_func, NULL);
+		sema_up (
+			&list_entry (list_pop_front (&cond->waiters),struct semaphore_elem, elem)->semaphore
+			);
+	}
+		
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
