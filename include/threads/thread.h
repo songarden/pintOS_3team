@@ -93,8 +93,16 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 	int64_t wake_time;
+	/* synch member */
+	struct list donation_list;  //기다리고 있는 쓰레드들 (donate-elem으로 연결)
+	struct list_elem donate_elem;
+	struct lock *wait_on_lock;  //기다리고 있는 락 (현재는 블록상태여야 함)
+	int real_priority;  //초기값 = 0
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	/* synch member */
+	
+
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -141,6 +149,10 @@ void thread_set_priority (int);
 
 bool thread_more_priority(const struct list_elem *a_, const struct list_elem *b_,
             void *aux UNUSED);
+
+bool
+thread_more_lock_priority (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED); 
 
 void list_sort_high_priority (struct list *list);
 void check_running_priority(void);
