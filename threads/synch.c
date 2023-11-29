@@ -114,10 +114,11 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
+	if (!list_empty (&sema->waiters)){
 		list_sort(&sema->waiters, thread_priority_compare, NULL);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
+	}
 	sema->value++;
 	// 스레드 리스케줄
 	thread_check_reschedule();
@@ -245,6 +246,11 @@ lock_held_by_current_thread (const struct lock *lock) {
 }
 
 /* One semaphore in a list. */
+/* 세마포어를 연결 리스트의 한 요소로 만들기 위해 구조체를 생성
+ * semaphore_elem 이라는 새로운 구조체 타입을 정의
+ * elem은 구조체를 연결리스트에 포함시키기 위한 변수
+ * semaphore는 세마포어 자체를 나타내는 변수
+ */
 struct semaphore_elem {
 	struct list_elem elem;              /* List element. */
 	struct semaphore semaphore;         /* This semaphore. */
@@ -328,7 +334,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
+	if (!list_empty (&cond->waiters)){
 		//기존 로직 비활성화
 		//list_sort(&cond->waiters, thread_priority_compare, NULL);
 
@@ -337,6 +343,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
