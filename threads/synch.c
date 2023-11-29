@@ -229,7 +229,7 @@ lock_acquire (struct lock *lock) {
         thread_donate_priority_compare, 0);
         donate_priority(); 	
     }
-	
+
 	sema_down (&lock->semaphore);
     //락을 획득한 후 현재 스레드가 대기 중인 락을 NULL로 설정
 	cur->wait_on_lock = NULL;
@@ -278,6 +278,23 @@ lock_release (struct lock *lock) {
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
+
+/* remove_with_lock 함수: 특정 락에 대한 우선순위 기부를 제거하는 함수
+ * 인자로 받은 락(lock)을 기다리고 있는 모든 스레드들의 우선순위 기부를 현재 스레드의 기부 목록에서 제거합니다.
+ */
+void remove_with_lock (struct lock *lock) {
+  struct list_elem *e;
+  struct thread *cur = thread_current ();
+
+  // 현재 스레드의 기부 목록을 순회하면서
+  for (e = list_begin (&cur->donations); e != list_end (&cur->donations); e = list_next (e)) {
+    struct thread *t = list_entry (e, struct thread, donation_elem);
+    // 해당 락을 기다리고 있는 스레드의 기부를 목록에서 제거
+    if (t->wait_on_lock == lock)
+      list_remove (&t->donation_elem);
+  }
+}
+
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
