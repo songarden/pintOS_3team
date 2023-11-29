@@ -275,6 +275,10 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	// 현재 스레드의 기부 목록에서 기부 제거하고 우선순위 갱신
+    remove_donations(lock);
+    update_priority();
+
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
