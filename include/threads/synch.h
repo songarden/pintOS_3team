@@ -10,6 +10,16 @@ struct semaphore {
 	struct list waiters;        /* List of waiting threads. */
 };
 
+/* 세마포어를 연결 리스트의 한 요소로 만들기 위해 구조체를 생성
+ * semaphore_elem 이라는 새로운 구조체 타입을 정의
+ * elem은 구조체를 연결리스트에 포함시키기 위한 변수
+ * semaphore는 세마포어 자체를 나타내는 변수
+ */
+struct semaphore_elem {
+	struct list_elem elem;              
+	struct semaphore semaphore;        
+};
+
 void sema_init (struct semaphore *, unsigned value);
 void sema_down (struct semaphore *);
 bool sema_try_down (struct semaphore *);

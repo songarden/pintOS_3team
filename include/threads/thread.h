@@ -153,7 +153,7 @@ extern struct list sleep_list;
 bool thread_priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 // 현재 CPU를 점유하고 있는 스레드의 우선순위가 낮을 시 양보하는 함수
-void thread_check_reschedule(void)
+void thread_check_reschedule(void);
 
 
 #endif /* threads/thread.h */
