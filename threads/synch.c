@@ -290,12 +290,30 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	//기존 로직 비활성화
+	//list_push_back (&cond->waiters, &waiter.elem);
+
+	// 세마포어의 우선순위를 고려하여 리스트에 삽입
+	list_insert_ordered(&cond->waiters, &waiter.elem, semaphore_priority_compare, NULL);
+
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
 }
+/*세마포어의 우선순위 비교 함수
+ * 리스트의 요소 중 2개를 인자로 전달받은 후
+ * 그 세마포어의 구성 원소 중 스레드의 priority 필드를 비교
+ * 스레드 우선순위 비교 함수를 호출 후 결과를 반환
+ */
+bool semaphore_priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+	struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
 
+	struct list_elem *ta = list_begin(&sa->semaphore.waiters);
+	struct list_elem *tb = list_begin(&sb->semaphore.waiters);
+	return thread_priority_compare(ta, tb, NULL);
+}
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
    LOCK must be held before calling this function.
