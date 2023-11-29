@@ -182,6 +182,26 @@ lock_init (struct lock *lock) {
 	lock->holder = NULL;
 	sema_init (&lock->semaphore, 1);
 }
+/*
+ * 우선 순위 기부함수
+ * wait_on_lock에서 기다리고 있는 lock을 현재 점유하고 있는 
+ * holder들을 순회하면서 모두에게 자신의 우선순위를 기부
+ * depth는 8 이하
+ * 연결된 wait_on_lock이 없으면 종료
+ */
+void donate_priority(void)
+{
+	int depth;
+    struct thread *cur = thread_current();
+    
+    for (depth =0; depth < 8; depth++) {
+    	if (!cur->wait_on_lock)
+        	break;
+        struct thread *holder = cur->wait_on_lock->holder;
+        holder->priority = cur->priority;
+        cur = holder;
+    }
+}
 
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
