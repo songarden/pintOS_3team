@@ -329,7 +329,12 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters))
-		list_sort(&cond->waiters, thread_priority_compare, NULL);
+		//기존 로직 비활성화
+		//list_sort(&cond->waiters, thread_priority_compare, NULL);
+
+		//스레드의 우선순위가 아닌 세마포어의 우선순위로 waiters_list를 정렬
+		list_sort(&cond->waiters, semaphore_priority_compare, NULL);
+
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 }
