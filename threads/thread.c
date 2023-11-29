@@ -456,6 +456,16 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	/*
+	 * 우선순위 기부 관련 필드 초기화
+	 * 매개변수로 전달받은 priority를 스레드의 고유 우선순위에 저장
+	 * 받은 기부목록을 연결 리스트로 생성
+	 * 스레드가 현재 기다리는 락의 목록을 NULL로 초기화
+	 */ 
+    t->init_priority = priority;
+    list_init(&t->donations);
+    t->wait_on_lock = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
