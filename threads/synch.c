@@ -294,6 +294,27 @@ void remove_with_lock (struct lock *lock) {
       list_remove (&t->donation_elem);
   }
 }
+/* refresh_priority 함수: 현재 스레드의 우선순위를 갱신하는 함수
+ * 현재 스레드의 우선순위를 초기 우선순위(init_priority)로 재설정하고,
+ * 기부 목록에 남아 있는 가장 높은 우선순위를 현재 스레드의 우선순위로 설정합니다.
+ */
+void refresh_priority (void) {
+  struct thread *cur = thread_current ();
+
+  // 현재 스레드의 우선순위를 초기 우선순위로 재설정
+  cur->priority = cur->init_priority;
+
+  // 기부 목록이 비어있지 않다면
+  if (!list_empty (&cur->donations)) {
+    // 기부 목록을 우선순위 순으로 정렬
+    list_sort (&cur->donations, thread_donate_priority_compare, 0);
+
+    // 기부 목록의 가장 앞에 있는 스레드의 우선순위가 현재 스레드의 우선순위보다 높다면 갱신
+    struct thread *front = list_entry (list_front (&cur->donations), struct thread, donation_elem);
+    if (front->priority > cur->priority)
+      cur->priority = front->priority;
+  }
+}
 
 
 /* Returns true if the current thread holds LOCK, false
