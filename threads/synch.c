@@ -217,8 +217,32 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	/* 
+	 * 현재 lock을 소유하는 스레드가 있다면
+	 * lock 소유자의 기부목록에 현재 스레드를 우선순위에 따라 삽입하고
+	 * 우선순위를 기부한다
+	 */
+	struct thread *cur = thread_current (); 
+	if (lock->holder) {	
+        cur->wait_on_lock = lock; 
+        list_insert_ordered(&lock->holder->donations, &cur->donation_elem, 
+        thread_donate_priority_compare, 0);
+        donate_priority(); 	
+    }
+	
 	sema_down (&lock->semaphore);
+    //락을 획득한 후 현재 스레드가 대기 중인 락을 NULL로 설정
+	cur->wait_on_lock = NULL;
 	lock->holder = thread_current ();
+}
+
+// 우선순위 기부 목록을 우선순위 순으로 정렬하는 함수
+bool
+thread_donate_priority_compare (const struct list_elem *l, 
+				const struct list_elem *s, void *aux UNUSED)
+{
+	return list_entry (l, struct thread, donation_elem)->priority
+		 > list_entry (s, struct thread, donation_elem)->priority;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
