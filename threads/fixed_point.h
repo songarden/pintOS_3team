@@ -26,8 +26,8 @@ int fp_to_int(int x){
 }
 
 int fp_to_int_round(int x){
-    if( x>=0 ) return x+F/2;
-    else if( x<=0 ) return x-F/2;
+    if( x>=0 ) return (x+F/2)/F;
+    else if( x<=0 ) return (x-F/2)/F;
 }
 
 int add_fp(int x, int y){

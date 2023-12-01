@@ -12,6 +12,9 @@
         "intrinsic.h": "c",
         "thread.h": "c",
         "synch.h": "c",
-        "interrupt.h": "c"
+        "interrupt.h": "c",
+        "intr-stubs.h": "c",
+        "palloc.h": "c",
+        "timer.h": "c"
     }
 }

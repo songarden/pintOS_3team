@@ -61,7 +61,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
-bool thread_mlfqs = true;
+bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -466,16 +466,21 @@ thread_get_nice (void) {
 	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
+	int nice = thread_current()->nice;
 	intr_set_level (old_level);
-	return thread_current()->nice;
+	return nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
 	/* TODO: Your implementation goes here */
-	printf("%d",mult_mixed(load_avg, 100));
-	return mult_mixed(load_avg, 100);
+	enum intr_level old_level;
+	old_level = intr_disable ();
+	int get_load_avg = fp_to_int_round(mult_mixed(load_avg, 100));
+	intr_set_level (old_level);
+	printf("%d",load_avg);
+	return get_load_avg;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -484,8 +489,9 @@ thread_get_recent_cpu (void) {
 	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
+	int get_recent_cpu = fp_to_int_round(mult_mixed(thread_current()->recent_cpu, 100));
 	intr_set_level (old_level);
-	return mult_mixed(thread_current()->recent_cpu, 100);
+	return get_recent_cpu;
 }
 
 void priority_calculator(struct thread* t){
@@ -495,20 +501,23 @@ void priority_calculator(struct thread* t){
 }
 
 int decay(){
-	return (int64_t)int_to_fp(2*load_avg)/(int64_t)int_to_fp(2*load_avg+1);
+	return div_fp((int64_t)int_to_fp(2*load_avg),(int64_t)(add_mixed(2*load_avg,1)));
 }
 
 void recent_cpu_calculator (struct thread *t){
 	if(t==idle_thread) return;
-	int recent_cpu =  decay() * recent_cpu + int_to_fp(t->nice);
+	int recent_cpu = add_mixed(mult_fp(decay(), recent_cpu),t->nice);
 	t->recent_cpu = recent_cpu;
 }
 
 void load_avg_calculator (void){
-	int ready_thread;
+	int ready_thread=0;
 	if(thread_current()!= idle_thread) ready_thread = 1 + list_size(&ready_list);
-	// load_avg = add_fp((int64_t)(mult_fp(load_avg, 59))/60, div_mixed(int_to_fp(ready_thread), 60));
-	load_avg = mult_fp(int_to_fp(59)/int_to_fp(60), load_avg) + mult_mixed(int_to_fp(1)/int_to_fp(60),ready_thread); 
+	load_avg = add_fp(
+		mult_fp(div_fp(int_to_fp(59),int_to_fp(60)), load_avg), 
+		div_mixed(int_to_fp(ready_thread),(60))
+	); 
+	// load_avg = add_fp(mult_fp(div_mixed(int_to_fp(59),60), load_avg), div_mixed(int_to_fp(ready_thread),60));
 }
 
 void recent_cpu_increment (void)
