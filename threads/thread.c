@@ -449,7 +449,7 @@ thread_get_priority (void) {
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) {
+thread_set_nice (int nice) {
 	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
@@ -479,7 +479,6 @@ thread_get_load_avg (void) {
 	old_level = intr_disable ();
 	int get_load_avg = fp_to_int_round(mult_mixed(load_avg, 100));
 	intr_set_level (old_level);
-	printf("%d",load_avg);
 	return get_load_avg;
 }
 
@@ -496,12 +495,15 @@ thread_get_recent_cpu (void) {
 
 void priority_calculator(struct thread* t){
 	if(t==idle_thread) return;
-	int priority = PRI_MAX - fp_to_int(div_mixed(t->recent_cpu,4)) - t->nice*2;
+	int priority = PRI_MAX - fp_to_int_round(div_mixed(t->recent_cpu,4)) - t->nice*2;
 	t->priority = priority;
 }
 
 int decay(){
-	return div_fp((int64_t)int_to_fp(2*load_avg),(int64_t)(add_mixed(2*load_avg,1)));
+	return div_fp(
+		(2*load_avg),
+		(add_mixed(2*load_avg,1)
+	));
 }
 
 void recent_cpu_calculator (struct thread *t){
