@@ -245,7 +245,7 @@ lock_acquire (struct lock *lock) {
 	enum intr_level old_level;
 	old_level = intr_disable ();
 	
-	if(holder){
+	if(holder && !thread_mlfqs){
 		priority_donate(holder, curr);
 		curr->waiting_lock = lock;
 	}
@@ -313,6 +313,10 @@ lock_release (struct lock *lock) {
 }
 
 void refresh_priority(struct thread* holder){
+	if(thread_mlfqs){
+		holder->priority=holder->original_priority;
+		return;
+	}
 	if(list_empty(&holder->holding_locks)) 
 		holder->priority=holder->original_priority;
 	else{
@@ -320,11 +324,11 @@ void refresh_priority(struct thread* holder){
 
 		if (list_empty(&next_lock->semaphore.waiters)) return;
 		// change
-		struct list_elem* e;
-		for(e=list_begin(&holder->holding_locks); e!= list_end(&holder->holding_locks); e=list_next(e)){
-			struct lock* target = list_entry(e, struct lock, elem);
-			list_sort(&target->semaphore.waiters, cpm_thread_func, NULL);
-		}
+		// struct list_elem* e;
+		// for(e=list_begin(&holder->holding_locks); e!= list_end(&holder->holding_locks); e=list_next(e)){
+		// 	struct lock* target = list_entry(e, struct lock, elem);
+		// 	list_sort(&target->semaphore.waiters, cpm_thread_func, NULL);
+		// }
 		//
 		list_sort(&holder->holding_locks, cmp_lock_priority_fuc, NULL);
 		holder->priority = holder->original_priority > list_entry(list_begin(&next_lock->semaphore.waiters),struct thread, elem)->priority
