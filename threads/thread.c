@@ -45,7 +45,6 @@ static struct lock tid_lock;
 static struct list destruction_req;
 
 static int load_avg; //고정 소수점임
-static int ready_threads; //idle_thread를 제외한 ready_list + CPU 스레드 수
 
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
@@ -120,11 +119,9 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&sleep_list);
 	list_init (&destruction_req);
-	ready_threads = 0;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
-	ready_threads++; //main 쓰레드 시작 시 ready_threads 수 +1
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
@@ -245,7 +242,6 @@ thread_block (void) {
 	ASSERT (!intr_context ());
 	ASSERT (intr_get_level () == INTR_OFF);
 	thread_current ()->status = THREAD_BLOCKED;
-	ready_threads--;
 	schedule ();
 }
 
@@ -266,9 +262,6 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	list_insert_ordered(&ready_list,&t->elem,thread_more_priority,NULL);
-	if(t!=idle_thread){
-		ready_threads++;
-	}
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -362,7 +355,6 @@ void thread_sleep_and_yield(void) {
 	
 	if (curr != idle_thread)
 		list_insert_ordered(&sleep_list,&curr->elem,thread_less,NULL);
-		ready_threads--;
 		if (list_begin(&sleep_list) == &curr->elem){
 			min_wake_ticks = curr->wake_time;
 		}
@@ -394,7 +386,6 @@ void time_to_wake (void){
 		if(t->wake_time <= now_time){
 			telem = list_remove(telem);
 			list_insert_ordered(&ready_list,&t->elem,thread_more_priority,NULL);
-			ready_threads++;
 			t->status = THREAD_READY;
 			t->wake_time = 0;
 		}
@@ -832,7 +823,6 @@ schedule (void) {
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
 			list_push_back (&destruction_req, &curr->elem);
-			ready_threads--;
 		}
 
 		/* Before switching the thread, we first save the information
