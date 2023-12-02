@@ -28,6 +28,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define F (1<<14)                       /* 17.14 소수점 표현의 1*/
+
+
 
 /* A kernel thread or user process.
  *
@@ -97,10 +100,13 @@ struct thread {
 	struct list donation_list;  //기다리고 있는 쓰레드들 (donate-elem으로 연결)
 	struct list_elem donate_elem;
 	struct lock *wait_on_lock;  //기다리고 있는 락 (현재는 블록상태여야 함)
-	int real_priority;  //초기값 = 0
+	int real_priority;  //초기값 = priority
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
-	/* synch member */
+
+	/* MLFQS 멤버 추가*/
+	int recent_cpu;
+	int nice;
 	
 
 
@@ -122,6 +128,7 @@ struct thread {
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+void set_load_avg (void);
 
 void thread_init (void);
 void thread_start (void);
@@ -161,7 +168,17 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+void thread_set_mlfqs_priority(struct thread *curr);
+void set_recent_cpu_and_priority(void);
+void thread_set_recent_cpu(struct thread *t);
 
 void do_iret (struct intr_frame *tf);
+
+/* 고정 소수점 */
+
+int fp_to_int_round(int x);
+int fp_multiple(int x,int y);
+int fp_divide(int x, int y);
+int fp_to_int_toward_zero(int x);
 
 #endif /* threads/thread.h */
