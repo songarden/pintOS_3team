@@ -110,6 +110,9 @@ struct thread {
 	//스레드를 다른 스레드의 기부 리스트에 추가하기 위한 리스트 요소를 구조체로 생성
     struct list_elem donation_elem;
 
+	int nice;
+  	int recent_cpu;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -162,10 +165,9 @@ void do_iret (struct intr_frame *tf);
 extern struct list sleep_list;  
 
 // 리스트의 원소 스레드들 간에 우선순위를 비교하는 함수
-bool thread_priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 // 현재 CPU를 점유하고 있는 스레드의 우선순위가 낮을 시 양보하는 함수
-void thread_check_reschedule(void);
-
+void test_max_priority (void);
 
 #endif /* threads/thread.h */

@@ -80,6 +80,7 @@ static tid_t allocate_tid (void);
 // Global descriptor table for the thread_start.
 // Because the gdt will be setup after the thread_init, we should
 // setup temporal gdt first.
+
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
 /* Initializes the threading system by transforming the code
@@ -186,6 +187,7 @@ tid_t
 thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
+	struct thread *curr = thread_current();
 	tid_t tid;
 
 	ASSERT (function != NULL);
@@ -212,6 +214,9 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+
+	//스레드를 생성하자마자 CPU를 점유하고 있는 스레드와 우선순위 비교를 해야함
+	test_max_priority();
 
 	return tid;
 }
@@ -251,7 +256,7 @@ thread_unblock (struct thread *t) {
 	// list_push_back (&ready_list, &t->elem);
 
 	// 차단상태의 스레드를 준비 상태로 전환하고, 우선순위를 기준으로 삽입
-	list_insert_ordered(&ready_list, &t->elem, thread_priority_compare, NULL);
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
 
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
@@ -262,12 +267,16 @@ thread_unblock (struct thread *t) {
  * 그 스레드의 priority 필드를 비교
  * a가 크면 True, b가 크거나 같으면 False를 반환
  */
-bool thread_priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-    const struct thread *t1 = list_entry(a, struct thread, elem);
-    const struct thread *t2 = list_entry(b, struct thread, elem);
+bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) 
+{
+	struct thread* t_a; 
+	struct thread* t_b;
 
-    return t1->priority > t2->priority;
+	t_a = list_entry(a, struct thread, elem);
+	t_b = list_entry(b, struct thread, elem);
+	return ((t_a->priority) > (t_b->priority)) ? true : false;
 }
+
 
 /* Returns the name of the running thread. */
 const char *
@@ -331,7 +340,7 @@ thread_yield (void) {
 		//list_push_back (&ready_list, &curr->elem);
 
 		// 현재 스레드가 CPU를 양보하고, 준비 리스트에서 우선순위를 기준으로 삽입
-		list_insert_ordered(&ready_list, &curr->elem, thread_priority_compare, NULL);
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -339,26 +348,37 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-
-	// 현재 우선순위를 설정
-	thread_current ()->priority = new_priority;
-
-	//read_list를 우선순위에 따라 재정렬
-	list_sort(&ready_list, thread_priority_compare, NULL);
-
-	//스케줄을 재조정
-	thread_check_reschedule();
+	
+    struct thread *current_thread = thread_current();
+    /* 우선순위 상속을 고려하여 실제 우선순위 변경 */
+    current_thread->init_priority = new_priority;
+    if (list_empty(&current_thread->donations) || new_priority > current_thread->priority) {
+        current_thread->priority = new_priority;
+    }
+	test_max_priority();
 }
 
 // 현재 CPU를 점유하고 있는 스레드의 우선순위보다 ready_list에 있는 스레드의 우선순위가 높은 경우
 // 양보하고 스케줄러에게 제어를 넘김
-void thread_check_reschedule(void) {
-    struct thread *current = thread_current();
-    struct thread *next = list_entry(list_begin(&ready_list), struct thread, elem);
+void test_max_priority (void){
+	
+	if (list_empty(&ready_list)) {
+		return;
+	}
+	
+	int run_priority = thread_current()->priority;
+	struct list_elem *e = list_begin(&ready_list);
+	struct thread *t = list_entry(e, struct thread, elem);
 
-    if (current->priority < next->priority) {
-        thread_yield();
-    }
+	enum intr_level old_level;
+	old_level = intr_disable ();
+	if (t->priority > run_priority) {
+		list_insert_ordered(&ready_list,&thread_current()->elem,cmp_priority,NULL);
+		thread_current () -> status = THREAD_READY;
+		schedule();
+	}
+	intr_set_level (old_level);
+
 }
 
 /* Returns the current thread's priority. */
@@ -460,12 +480,12 @@ init_thread (struct thread *t, const char *name, int priority) {
 	/*
 	 * 우선순위 기부 관련 필드 초기화
 	 * 매개변수로 전달받은 priority를 스레드의 고유 우선순위에 저장
-	 * 받은 기부목록을 연결 리스트로 생성
 	 * 스레드가 현재 기다리는 락의 목록을 NULL로 초기화
+	 * 받은 기부목록을 연결 리스트로 생성
 	 */ 
     t->init_priority = priority;
-    list_init(&t->donations);
     t->wait_on_lock = NULL;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
