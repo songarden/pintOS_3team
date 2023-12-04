@@ -269,7 +269,7 @@ thread_unblock (struct thread *t) {
 void check_running_priority(void){
 	enum intr_level old_level;
 	
-	if (list_empty(&ready_list) == true)
+	if (list_empty(&ready_list) == true || thread_current() == idle_thread)
 		return;
 
 	old_level = intr_disable ();
@@ -482,9 +482,6 @@ void set_load_avg (void){
 	int first_mul = fp_multiple(59*F,load_avg);
 	int ready_threads_count = list_size(&ready_list)+1;
 	list_sort(&ready_list,thread_more_priority,NULL);
-	if(list_end(&ready_list)->prev == &idle_thread->elem){
-		ready_threads_count -= 1;
-	}
 	if(thread_current() == idle_thread)
 		ready_threads_count -= 1;
 	
