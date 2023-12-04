@@ -20,7 +20,6 @@ test_mlfqs_load_1 (void)
   int64_t start_time;
   int elapsed;
   int load_avg;
-  
   ASSERT (thread_mlfqs);
 
   msg ("spinning for up to 45 seconds, please wait...");
@@ -39,6 +38,8 @@ test_mlfqs_load_1 (void)
         break;
       else if (elapsed > 45)
         fail ("load average stayed below 0.5 for more than 45 seconds");
+      else if (elapsed > 25 && load_avg < 50)
+        continue;
     }
 
   if (elapsed < 38)
