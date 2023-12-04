@@ -28,6 +28,12 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* threads/thread.h */
+#define PRI_MAX 63               
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -98,6 +104,21 @@ struct thread {
 	// 깨어날 시간을 저장하는 변수
 	int64_t wake_up_time;  
 
+	// 스레드 고유의 우선순위를 저장하는 변수를 선언
+	int init_priority;
+    
+	// 스레드가 현재 기다리고 있는 락 포인터를 구조체로 생성
+    struct lock *wait_on_lock;
+
+	//다른 스레드들로부터 받은 우선순위 기부들을 추적하기 위한 리스트를 구조체로 생성
+    struct list donations;
+
+	//스레드를 다른 스레드의 기부 리스트에 추가하기 위한 리스트 요소를 구조체로 생성
+    struct list_elem donation_elem;
+
+	int nice;
+  	int recent_cpu;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -148,5 +169,11 @@ void do_iret (struct intr_frame *tf);
 
 // 대기 리스트 전역 변수 선언
 extern struct list sleep_list;  
+
+// 리스트의 원소 스레드들 간에 우선순위를 비교하는 함수
+bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+// 현재 CPU를 점유하고 있는 스레드의 우선순위가 낮을 시 양보하는 함수
+void test_max_priority (void);
 
 #endif /* threads/thread.h */
