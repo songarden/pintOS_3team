@@ -18,13 +18,26 @@
             "command": [
                 "${workspaceFolder}/utils/pintos"
             ],
+            // "args": [
+            //     "--gdb",
+            //     "--",
+            //     "-q",
+            //     "-mlfqs",
+            //     "run",
+            //     "${input:test}"
+            // ],
             "args": [
                 "--gdb",
+                "-v",
+                "-k",
+                "-T", "60000",
+                "-m", "20",
+                "--fs-disk=10",
+                "-p", "tests/userprog/args-none:args-none",
                 "--",
                 "-q",
-                "-mlfqs",
-                "run",
-                "${input:test}"
+                "-f", "run",
+                "args-none"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"
