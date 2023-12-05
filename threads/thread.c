@@ -323,8 +323,6 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	// if(list_empty(&ready_list))	list_push_back (&ready_list, &t->elem);
-	// else list_insert_ordered(&ready_list, &t->elem, sorting_priority, NULL);
 	list_insert_ordered(&ready_list, &t->elem, sorting_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
@@ -348,7 +346,7 @@ void thread_ticks_end(void){
 			thread_unblock(isAwake);
 			isAwake->for_ticks = 0;
 		} else {
-			e = list_next(e);
+			return;
 		}
 	}
 }
@@ -446,7 +444,6 @@ thread_get_priority (void) {
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice) {
-	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
 	struct thread* curr = thread_current();
@@ -460,7 +457,6 @@ thread_set_nice (int nice) {
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) {
-	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
 	int nice = thread_current()->nice;
@@ -471,7 +467,6 @@ thread_get_nice (void) {
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
-	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
 	int get_load_avg = fp_to_int_round(load_avg * 100);
@@ -482,7 +477,6 @@ thread_get_load_avg (void) {
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) {
-	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
 	int get_recent_cpu = fp_to_int_round(thread_current()->recent_cpu * 100);
@@ -503,11 +497,7 @@ int decay(){
 
 void recent_cpu_calculator (struct thread *t){
 	if(t==idle_thread) return;
-	
-	// int recent_cpu = decay();
-    // recent_cpu = mult_fp(decay(), t->recent_cpu);
     int recent_cpu = add_mixed(mult_fp(decay(), t->recent_cpu), t->nice);
-
     t->recent_cpu = recent_cpu;
 }
 
@@ -518,7 +508,6 @@ void load_avg_calculator (void){
 		mult_fp(div_fp(int_to_fp(59),int_to_fp(60)), load_avg), 
 		div_mixed(int_to_fp(ready_thread),(60))
 	); 
-	// load_avg = add_fp(mult_fp(div_mixed(int_to_fp(59),60), load_avg), div_mixed(int_to_fp(ready_thread),60));
 }
 
 void recent_cpu_increment (void)

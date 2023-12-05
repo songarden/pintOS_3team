@@ -321,13 +321,11 @@ void refresh_priority(struct thread* holder){
 	else{
 		struct lock* next_lock = list_entry(list_begin(&holder->holding_locks), struct lock, elem);
 		if (list_empty(&next_lock->semaphore.waiters)) return;
-		// change
 		struct list_elem* e;
 		for(e=list_begin(&holder->holding_locks); e!= list_end(&holder->holding_locks); e=list_next(e)){
 			struct lock* target = list_entry(e, struct lock, elem);
 			list_sort(&target->semaphore.waiters, cpm_thread_func, NULL);
 		}
-		//
 		list_sort(&holder->holding_locks, cmp_lock_priority_fuc, NULL);
 		holder->priority = holder->original_priority > list_entry(list_begin(&next_lock->semaphore.waiters),struct thread, elem)->priority
 		? holder->original_priority 
