@@ -27,6 +27,9 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
+static void start_process (void* file_name_);
+static void parsing_file_input(char *file_name, struct intr_frame *if_);
+
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -165,9 +168,12 @@ process_exec (void *f_name) {
 	char *file_name = f_name;
 	bool success;
 
+
+
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
+	
 	struct intr_frame _if;
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
@@ -178,7 +184,7 @@ process_exec (void *f_name) {
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
-
+	hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
@@ -204,6 +210,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while(1);
 	return -1;
 }
 
@@ -413,9 +420,11 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
+	
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	
+	parsing_file_input(file_name,if_);
 
 	success = true;
 
@@ -423,6 +432,40 @@ done:
 	/* We arrive here whether the load is successful or not. */
 	file_close (file);
 	return success;
+}
+
+static void parsing_file_input(char *file_name, struct intr_frame *if_){
+	char *f_name= (char *)memset(f_name,0,strlen(file_name)+1);
+	strlcpy (f_name, file_name, strlen(file_name)+1);
+	char *token, *save_ptr;
+	int var_cnt = 0;
+	char *address[128];
+	char *token_temp[128];
+	int i;
+	for (token = strtok_r(f_name, " ", &save_ptr); token != NULL;
+			token = strtok_r (NULL, " ", &save_ptr)){
+		token_temp[var_cnt++] = token;
+	}
+	for(i=var_cnt-1;i>=0;i--){
+		if_->rsp -= strlen(token_temp[i])+1;
+		address[i] = if_->rsp;
+		memcpy(if_->rsp,token_temp[i],strlen(token_temp[i])+1);
+	}
+	
+	uint8_t word_align = 0;
+	size_t align = (if_->rsp % sizeof(uint8_t));
+	if_->rsp -= (uint8_t)align;
+	memcpy(if_->rsp,word_align,align);
+	// if_->rsp -= (if_->rsp % 8);
+	if_->rsp -= sizeof(char *);
+	for(i=var_cnt-1;i>=0;i--){
+		if_->rsp -= sizeof(char *);
+		memcpy(if_->rsp,address[i],sizeof(char *));
+	}
+	if_->R.rsi = if_->rsp;
+	if_->R.rdi = var_cnt;
+
+	if_->rsp -= sizeof(void *);
 }
 
 
