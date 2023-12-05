@@ -35,7 +35,7 @@ int add_fp(int x, int y){
 }
 
 int add_mixed(int x, int n){
-    return x+ int_to_fp(n);
+    return x + int_to_fp(n);
 }
 
 int sub_fp(int x, int y){

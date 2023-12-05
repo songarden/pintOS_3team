@@ -181,8 +181,7 @@ thread_tick (void) {
 	/* Enforce preemption. 
 	틱을 증가시켜 선점후 틱 값이 TIME_SLICE(스레드에 할당단 최대 실행 시간)을 초과하면 중단하고 yield를 시킴.
 	*/
-	// thread_ticks++;
-	if (++thread_ticks >= TIME_SLICE);
+	if (++thread_ticks >= TIME_SLICE)
 		intr_yield_on_return ();
 }
 
@@ -288,8 +287,7 @@ sorting_ticks (const struct list_elem* a_, const struct list_elem* b_, void* aux
   const struct thread *a = list_entry (a_, struct thread, elem);
   const struct thread *b = list_entry (b_, struct thread, elem);
   
-  if(!aux) return a->for_ticks < b->for_ticks;
-  else return a->for_ticks > b->for_ticks;
+  return a->for_ticks < b->for_ticks;
 }
 
 void blocking_for_ticks(int64_t ticks){
@@ -299,6 +297,7 @@ void blocking_for_ticks(int64_t ticks){
 	cur->for_ticks = ticks;
 	list_insert_ordered(&blocked_list, &cur->elem, sorting_ticks, NULL);
 	thread_block();
+	thread_yield();
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -324,19 +323,19 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	if(list_empty(&ready_list))	list_push_back (&ready_list, &t->elem);
-	else list_insert_ordered(&ready_list, &t->elem, sorting_priority, (void*)1);
+	// if(list_empty(&ready_list))	list_push_back (&ready_list, &t->elem);
+	// else list_insert_ordered(&ready_list, &t->elem, sorting_priority, NULL);
+	list_insert_ordered(&ready_list, &t->elem, sorting_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
 
 static bool sorting_priority (const struct list_elem* a_, const struct list_elem* b_, void* aux) 
 {
-  const struct thread *a = list_entry (a_, struct thread, elem);
-  const struct thread *b = list_entry (b_, struct thread, elem);
+	const struct thread *a = list_entry (a_, struct thread, elem);
+	const struct thread *b = list_entry (b_, struct thread, elem);
   
-  if(!aux) return a->priority < b->priority;
-  else return a->priority > b->priority;
+	return a->priority > b->priority;
 }
 
 void thread_ticks_end(void){
@@ -352,7 +351,6 @@ void thread_ticks_end(void){
 			e = list_next(e);
 		}
 	}
-	
 }
 
 /* Returns the name of the running thread. */
@@ -420,8 +418,7 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_insert_ordered(&ready_list, &curr->elem, sorting_priority, (void*)1);
-		// list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, sorting_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -432,7 +429,6 @@ thread_set_priority (int new_priority) {
 	if(thread_mlfqs) return;
 
 	struct thread* curr = thread_current();
-	thread_current ()->priority = new_priority;
 	thread_current()->original_priority = new_priority;
 	refresh_priority(curr);
 	struct thread* next = list_entry(list_begin(&ready_list), struct thread, elem);
@@ -455,6 +451,7 @@ thread_set_nice (int nice) {
 	old_level = intr_disable ();
 	struct thread* curr = thread_current();
 	curr->nice = nice;
+	priority_calculator(curr);
 	intr_set_level (old_level);
 	thread_yield();
 }
@@ -477,7 +474,7 @@ thread_get_load_avg (void) {
 	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
-	int get_load_avg = fp_to_int_round(mult_mixed(load_avg, 100));
+	int get_load_avg = fp_to_int_round(load_avg * 100);
 	intr_set_level (old_level);
 	return get_load_avg;
 }
@@ -488,7 +485,7 @@ thread_get_recent_cpu (void) {
 	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable ();
-	int get_recent_cpu = fp_to_int_round(mult_mixed(thread_current()->recent_cpu, 100));
+	int get_recent_cpu = fp_to_int_round(thread_current()->recent_cpu * 100);
 	intr_set_level (old_level);
 	return get_recent_cpu;
 }
@@ -500,16 +497,18 @@ void priority_calculator(struct thread* t){
 }
 
 int decay(){
-	return div_fp(
-		(2*load_avg),
-		(add_mixed(2*load_avg,1)
-	));
+	int decay = mult_mixed(load_avg,2); 
+	return div_fp(mult_mixed(load_avg, 2), add_mixed(mult_mixed(load_avg, 2), 1));
 }
 
 void recent_cpu_calculator (struct thread *t){
 	if(t==idle_thread) return;
-	int recent_cpu = add_mixed(mult_fp(decay(), recent_cpu),t->nice);
-	t->recent_cpu = recent_cpu;
+	
+	// int recent_cpu = decay();
+    // recent_cpu = mult_fp(decay(), t->recent_cpu);
+    int recent_cpu = add_mixed(mult_fp(decay(), t->recent_cpu), t->nice);
+
+    t->recent_cpu = recent_cpu;
 }
 
 void load_avg_calculator (void){
@@ -526,7 +525,7 @@ void recent_cpu_increment (void)
 {
 	struct thread* curr = thread_current();
 	if(curr==idle_thread) return;
-	curr->recent_cpu = add_mixed(curr->recent_cpu,1);
+	curr->recent_cpu = add_mixed(thread_current()->recent_cpu, 1);
 }
 
 void recalc_all (void)
