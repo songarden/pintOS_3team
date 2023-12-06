@@ -166,6 +166,7 @@ error:
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
+	char *buf;
 	bool success;
 
 
@@ -182,10 +183,19 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+	char *save_ptr;
+	char *f_copy;
+	f_copy = palloc_get_page(0);
+	if (f_copy == NULL)
+		return TID_ERROR;
+	strlcpy (f_copy, file_name, PGSIZE);
+	f_copy = strtok_r(f_copy," ",&save_ptr);
 	/* And then load the binary */
-	success = load (file_name, &_if);
+	success = load (f_copy, &_if);
+	parsing_file_input(file_name,&_if);
 	hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
 	/* If load failed, quit. */
+	palloc_free_page (f_copy);
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
@@ -336,6 +346,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+	
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -424,7 +435,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 	
-	parsing_file_input(file_name,if_);
+	
 
 	success = true;
 
@@ -435,8 +446,12 @@ done:
 }
 
 static void parsing_file_input(char *file_name, struct intr_frame *if_){
-	char *f_name= (char *)memset(f_name,0,strlen(file_name)+1);
-	strlcpy (f_name, file_name, strlen(file_name)+1);
+	char *f_name;
+	f_name = palloc_get_page(0);
+	if (f_name == NULL)
+		return TID_ERROR;
+	// strlcpy (f_name, file_name, strlen(file_name)+1);
+	strlcpy (f_name, file_name, PGSIZE);
 	char *token, *save_ptr;
 	int var_cnt = 0;
 	uintptr_t *address[128];
@@ -470,6 +485,7 @@ static void parsing_file_input(char *file_name, struct intr_frame *if_){
 	if_->R.rdi = var_cnt;
 
 	if_->rsp -= sizeof(void *);
+	palloc_free_page(f_name);
 }
 
 
