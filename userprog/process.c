@@ -439,28 +439,32 @@ static void parsing_file_input(char *file_name, struct intr_frame *if_){
 	strlcpy (f_name, file_name, strlen(file_name)+1);
 	char *token, *save_ptr;
 	int var_cnt = 0;
-	char *address[128];
+	uintptr_t *address[128];
 	char *token_temp[128];
 	int i;
 	for (token = strtok_r(f_name, " ", &save_ptr); token != NULL;
 			token = strtok_r (NULL, " ", &save_ptr)){
 		token_temp[var_cnt++] = token;
 	}
+	printf("USER_STACK : %p\n",USER_STACK);
 	for(i=var_cnt-1;i>=0;i--){
 		if_->rsp -= strlen(token_temp[i])+1;
-		address[i] = if_->rsp;
-		memcpy(if_->rsp,token_temp[i],strlen(token_temp[i])+1);
+		printf("rsp address[%d] (파싱 인자 삽입 위해 down) : %p\n",i,if_->rsp);
+		address[i] = (uintptr_t*)if_->rsp;
+		strlcpy(if_->rsp,token_temp[i],strlen(token_temp[i])+1);
+		printf("문자값 : %s\n", token_temp[i]);
 	}
-	
+	/*word align*/
 	uint8_t word_align = 0;
 	size_t align = (if_->rsp % sizeof(uint8_t));
 	if_->rsp -= (uint8_t)align;
 	memcpy(if_->rsp,word_align,align);
-	// if_->rsp -= (if_->rsp % 8);
+	/*argv[n] = added align*/
 	if_->rsp -= sizeof(char *);
+	
 	for(i=var_cnt-1;i>=0;i--){
-		if_->rsp -= sizeof(char *);
-		memcpy(if_->rsp,address[i],sizeof(char *));
+		if_->rsp -= sizeof(uintptr_t);
+		*((uintptr_t*)if_->rsp) = address[i];
 	}
 	if_->R.rsi = if_->rsp;
 	if_->R.rdi = var_cnt;
