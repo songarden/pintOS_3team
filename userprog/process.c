@@ -26,6 +26,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+static void file_input_parser_and_set(char* file_name, struct intr_frame* if_);
 
 /* General process initializer for initd and other process. */
 static void
@@ -178,7 +179,8 @@ process_exec (void *f_name) {
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
-
+	file_input_parser_and_set(file_name, &_if);
+	hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
@@ -204,6 +206,8 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	// while(1);
+	for(int i = 10000000000000; i>=0;i--);
 	return -1;
 }
 
@@ -425,6 +429,35 @@ done:
 	return success;
 }
 
+
+static void file_input_parser_and_set(char* file_name, struct intr_frame* if_){
+	int i;
+	char* save_ptr, * token, * arg_address[128];
+	int arg_cnt = 0;
+	token = strtok_r(file_name, " ", &save_ptr);
+	arg_address[arg_cnt++] = token;
+	while (token = strtok_r(NULL, " ", &save_ptr)) {
+		arg_address[arg_cnt++] = token;
+	}
+
+	for(i=arg_cnt-1;i>=0;i--){
+		if_->rsp -= strlen(arg_address[i])+1;
+		strlcpy(if_->rsp,arg_address[i],strlen(arg_address[i])+1);
+		arg_address[i] = (uintptr_t*)if_->rsp;
+	}
+
+	if_->rsp -= if_->rsp%8;
+	if_->rsp -= sizeof(char *);
+
+
+	for(i=arg_cnt-1; i>=0;i--){
+		if_->rsp -= sizeof(uintptr_t*);
+		*(uintptr_t*)(if_->rsp) = arg_address[i];
+	}
+	if_->R.rsi = if_->rsp;
+	if_->R.rdi = arg_cnt;
+	if_->rsp -= sizeof(void *);
+}
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */

@@ -10,7 +10,8 @@
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-
+void check_address(void* addr);
+void get_argument(void* rsp, int* arg, int count);
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -35,6 +36,14 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+}
+
+void check_address(void* addr){
+
+}
+
+void get_argument(void* rsp, int* arg, int count){
+
 }
 
 /* The main system call interface */
