@@ -112,8 +112,12 @@ struct thread {
 	/* file descripter 멤버 */
 	struct file **fdt;
 	int next_fd;
-	
 
+	struct intr_frame parent_if;
+	struct list child_list;
+	struct list_elem child_elem;
+
+	struct semaphore dupl_sema;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
