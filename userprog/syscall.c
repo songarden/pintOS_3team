@@ -22,6 +22,9 @@ int exec(const char *cmd_line);
 void exit(int status);
 void halt(void);
 int write(int fd, void *buffer, unsigned size);
+pid_t fork(const char *file, struct intr_frame *f);
+bool create_file(const char *file, unsigned initial_size);
+bool remove_file(const char *file);
 
 /* System call.
  *
@@ -78,12 +81,19 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = write(f->R.rdi,f->R.rsi,f->R.rdx);
 			break;
 		
-		case SYS
+		case SYS_FORK:
+			f->R.rax = fork(f->R.rdi,f);
+			break;
+		
+		case SYS_CREATE:
+			f->R.rax = create_file(f->R.rdi,f->R.rsi);
+			break;
+		
+		case SYS_REMOVE:
+			f->R.rax = remove_file(f->R.rdi);
 		
 
 	}
-	// printf ("system call!\n");
-	// thread_exit ();
 }
 
 void check_addr(void *addr){
@@ -93,30 +103,33 @@ void check_addr(void *addr){
 }
 
 int open(const char *file_name){
-	//here is open function code
 	check_addr(file_name);
+
 	struct file *file = filesys_open(file_name);
 	if (file == NULL) {
 		return -1;
 	}
+
 	int fd = process_add_fd(file);
 	if (fd == -1){
 		file_close(file);
 	}
+
 	return fd;
 }
 
 int exec(const char *cmd_line){
 	check_addr(cmd_line);
+
 	char *cmd_line_copy;
 	cmd_line_copy = palloc_get_page(0);
 	if (cmd_line_copy == NULL)
 		return TID_ERROR;
 	strlcpy (cmd_line_copy,cmd_line,PGSIZE);
+
 	if(process_exec(cmd_line) == -1){
 		exit(-1);
 	}
-	
 }
 
 void exit(int status){
@@ -130,8 +143,36 @@ void halt(void){
 }
 
 int write(int fd, void *buffer, unsigned size){
+	check_addr(buffer);
 	if (fd == 1){
 		putbuf((char*)buffer,(size_t)size);
 		return size;
 	}
+}
+
+pid_t fork(const char *file, struct intr_frame *f){
+	check_addr(file);
+	return process_fork(file,f);
+
+}
+
+bool create_file(const char *file, unsigned initial_size){
+	check_addr(file);
+	// char *file_name_copy = palloc_get_page(0);
+	// if (file_name_copy == NULL)
+	// 	return TID_ERROR;
+	// strlcpy (file_name_copy,file,PGSIZE);
+
+	bool success = filesys_create(file,initial_size);
+	// bool success = filesys_create(file_name_copy,initial_size);
+	// palloc_free_page(file_name_copy);
+
+	return success;
+}
+
+/* 아직 구현 미완 -> 열려있는지 fd 전체 확인한 뒤 열려있으면 닫힐때 까지 wait하기 구현해야 함 */
+bool remove_file(const char *file){
+	check_addr(file);
+	bool success = filesys_remove(file);
+	return success;
 }

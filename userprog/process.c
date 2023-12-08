@@ -81,8 +81,35 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	struct thread *curr = thread_current();
+	struct thread *child;
+	memcpy(&curr->parent_if,if_,sizeof(struct intr_frame));
+	tid_t tid = thread_create (name,
+			PRI_DEFAULT, __do_fork, curr);
+	if (tid == TID_ERROR){
+		return TID_ERROR;
+	}
+	if ((child = process_get_child(tid)) == -1){
+		return TID_ERROR;
+	}
+	sema_down(&child->dupl_sema);
+	return tid;
+}
+
+struct thread *process_get_child(tid_t child_tid){
+	struct thread *curr = thread_current ();
+	struct list_elem *elem;
+	if (list_empty(&curr->child_list)){
+		return -1;
+	}
+	for(elem = list_begin(&curr->child_list);elem != list_end(&curr->child_list);elem = next(elem)){
+		struct thread *find_child = list_entry(elem,struct thread,child_elem);
+		if(find_child->tid == child_tid){
+			return find_child;
+		}
+	}
+	return -1;
+	
 }
 
 #ifndef VM
@@ -127,7 +154,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent ->parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -153,7 +180,9 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
-
+	list_push_back(&parent->child_list,&current->child_elem);
+	current->tf = if_;
+	file_duplicate(parent->name);
 	process_init ();
 
 	/* Finally, switch to the newly created process. */

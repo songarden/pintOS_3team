@@ -228,6 +228,7 @@ thread_create (const char *name, int priority,
 		return TID_ERROR;
 	}
 
+	list_push_back(&thread_current()->child_list,&t->child_elem);
 	
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -632,6 +633,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t-> nice = 0;
 	t->recent_cpu = 0;
 	t->next_fd = 2;
+	list_init(&t->child_list);
+
+	sema_init(&t->dupl_sema,0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
