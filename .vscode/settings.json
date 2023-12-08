@@ -2,6 +2,8 @@
     "files.associations": {
         "*.inc": "c",
         "thread.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "filesys.h": "c",
+        "debug.h": "c"
     }
 }

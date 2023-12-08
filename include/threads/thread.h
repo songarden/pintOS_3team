@@ -29,7 +29,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 #define F (1<<14)                       /* 17.14 소수점 표현의 1*/
-
+#define FDT_PAGES 2
+#define FDT_CNT_LIMIT 128
 
 
 /* A kernel thread or user process.
@@ -107,12 +108,17 @@ struct thread {
 	/* MLFQS 멤버 추가*/
 	int recent_cpu;
 	int nice;
+
+	/* file descripter 멤버 */
+	struct file **fdt;
+	int next_fd;
 	
 
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
