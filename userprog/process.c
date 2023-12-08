@@ -195,7 +195,7 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (f_copy, &_if);
 	parsing_file_input(file_name,&_if);
-	hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
+	// hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
 	/* If load failed, quit. */
 	palloc_free_page (f_copy);
 	palloc_free_page (file_name);
@@ -222,7 +222,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	while(1);
+	for(int i =0; i<1000000000; i++);
 	return -1;
 }
 
@@ -234,7 +234,10 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	for (int i=2;i<=curr->next_fd;i++){
+		file_close(curr->fdt[i]);
+	}
+	palloc_free_page(curr->fdt);
 	process_cleanup ();
 }
 
@@ -275,6 +278,24 @@ process_activate (struct thread *next) {
 	/* Set thread's kernel stack for use in processing interrupts. */
 	tss_update (next);
 }
+
+int process_add_fd(struct file *f){
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fdt;
+	
+	while(curr->next_fd < FDT_CNT_LIMIT && fdt[curr->next_fd] != NULL){
+		curr->next_fd++;
+	}
+
+	if(curr->next_fd == FDT_CNT_LIMIT){
+		return -1;
+	}
+	fdt[curr->next_fd] = f;
+
+	return curr->next_fd;
+}
+
+
 
 /* We load ELF binaries.  The following definitions are taken
  * from the ELF specification, [ELF1], more-or-less verbatim.  */
@@ -452,7 +473,6 @@ static void parsing_file_input(char *file_name, struct intr_frame *if_){
 	f_name = palloc_get_page(0);
 	if (f_name == NULL)
 		return TID_ERROR;
-	// strlcpy (f_name, file_name, strlen(file_name)+1);
 	strlcpy (f_name, file_name, PGSIZE);
 	char *token, *save_ptr;
 	int var_cnt = 0;
@@ -463,26 +483,22 @@ static void parsing_file_input(char *file_name, struct intr_frame *if_){
 			token = strtok_r (NULL, " ", &save_ptr)){
 		token_temp[var_cnt++] = token;
 	}
-	printf("USER_STACK : %p\n",USER_STACK);
 	for(i=var_cnt-1;i>=0;i--){
 		if_->rsp -= strlen(token_temp[i])+1;
-		printf("rsp address[%d] (파싱 인자 삽입 위해 down) : %p\n",i,if_->rsp);
-		address[i] = (uintptr_t*)if_->rsp;
+		address[i] = (uintptr_t *)if_->rsp;
 		strlcpy(if_->rsp,token_temp[i],strlen(token_temp[i])+1);
-		printf("문자값 : %s\n", token_temp[i]);
 	}
 	/*word align*/
-	uint8_t word_align = 0;
-	size_t align = (if_->rsp % sizeof(uint8_t));
-	if_->rsp -= (uint8_t)align;
-	memcpy(if_->rsp,word_align,align);
+	if_->rsp -= (if_->rsp % 8);
+
 	/*argv[n] = added align*/
 	if_->rsp -= sizeof(char *);
-	
+
 	for(i=var_cnt-1;i>=0;i--){
-		if_->rsp -= sizeof(uintptr_t);
-		*((uintptr_t*)if_->rsp) = address[i];
+		if_->rsp -= sizeof(uintptr_t *);
+		*((uintptr_t *)if_->rsp) = address[i];
 	}
+
 	if_->R.rsi = if_->rsp;
 	if_->R.rdi = var_cnt;
 
