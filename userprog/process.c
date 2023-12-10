@@ -53,7 +53,7 @@ process_create_initd (const char *file_name) {
     token = strtok_r(fn_copy, " ", &save_ptr);
 
     // 첫 번째 토큰(프로그램 이름)으로 스레드 생성
-    tid = thread_create(token, PRI_DEFAULT, start_process, fn_copy);
+    tid = thread_create(token, PRI_DEFAULT, initd, fn_copy);
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy);
     return tid;
@@ -166,6 +166,8 @@ int
 process_exec (void *f_name) {
 	char *file_name = f_name;
 	bool success;
+	struct thread *cur = thread_current();
+
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
@@ -178,6 +180,20 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+	// for argument parsing
+    char *argv[64]; // argument 배열
+    int argc = 0;    // argument 개수
+
+    char *token;    
+    char *save_ptr; // 분리된 문자열 중 남는 부분의 시작주소
+    token = strtok_r(file_name, " ", &save_ptr);
+    while (token != NULL)
+    {
+        argv[argc] = token;
+        token = strtok_r(NULL, " ", &save_ptr);
+        argc++;
+    }
+
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
@@ -185,6 +201,15 @@ process_exec (void *f_name) {
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
+
+	// 스택에 인자 넣기
+    void **rspp = &_if.rsp;
+    argument_stack(argv, argc, rspp);
+    _if.R.rdi = argc;
+    _if.R.rsi = (uint64_t)*rspp + sizeof(void *);
+
+    hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
+
 
 	/* Start switched process. */
 	do_iret (&_if);
