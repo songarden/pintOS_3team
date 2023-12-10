@@ -40,21 +40,23 @@ process_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
-	char *fn_copy;
+    char *fn_copy;
 	tid_t tid;
 
-	/* Make a copy of FILE_NAME.
-	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
-	if (fn_copy == NULL)
-		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+    // file_name을 복사 및 파싱
+    char *save_ptr;
+    char *token;
+    char *fn_copy = palloc_get_page(0);
+    if (fn_copy == NULL)
+        return TID_ERROR;
+    strlcpy(fn_copy, file_name, PGSIZE);
+    token = strtok_r(fn_copy, " ", &save_ptr);
 
-	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
-	return tid;
+    // 첫 번째 토큰(프로그램 이름)으로 스레드 생성
+    tid = thread_create(token, PRI_DEFAULT, start_process, fn_copy);
+    if (tid == TID_ERROR)
+        palloc_free_page(fn_copy);
+    return tid;
 }
 
 /* A thread function that launches first user process. */
