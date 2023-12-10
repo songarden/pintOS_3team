@@ -216,6 +216,44 @@ process_exec (void *f_name) {
 	NOT_REACHED ();
 }
 
+void argument_stack(char **argv, int argc, void **rsp)
+{
+    // Save argument strings (character by character)
+    for (int i = argc - 1; i >= 0; i--)
+    {
+        int argv_len = strlen(argv[i]);
+        for (int j = argv_len; j >= 0; j--)
+        {
+            char argv_char = argv[i][j];
+            (*rsp)--;
+            **(char **)rsp = argv_char; // 1 byte
+        }
+        argv[i] = *(char **)rsp; // 배열에 rsp 주소 넣기
+    }
+
+    // Word-align padding
+    int pad = (int)*rsp % 8;
+    for (int k = 0; k < pad; k++)
+    {
+        (*rsp)--;
+        **(uint8_t **)rsp = 0;
+    }
+
+    // Pointers to the argument strings
+    (*rsp) -= 8;
+    **(char ***)rsp = 0;
+
+    for (int i = argc - 1; i >= 0; i--)
+    {
+        (*rsp) -= 8;
+        **(char ***)rsp = argv[i];
+    }
+
+    // Return address
+    (*rsp) -= 8;
+    **(void ***)rsp = 0;
+}
+
 
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
