@@ -40,20 +40,17 @@ process_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
-    char *fn_copy;
+	char *fn_copy;
 	tid_t tid;
 
     // file_name을 복사 및 파싱
-    char *save_ptr;
-    char *token;
-    char *fn_copy = palloc_get_page(0);
+    fn_copy = palloc_get_page (0);
     if (fn_copy == NULL)
         return TID_ERROR;
     strlcpy(fn_copy, file_name, PGSIZE);
-    token = strtok_r(fn_copy, " ", &save_ptr);
 
     // 첫 번째 토큰(프로그램 이름)으로 스레드 생성
-    tid = thread_create(token, PRI_DEFAULT, initd, fn_copy);
+    tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy);
     return tid;
@@ -198,10 +195,11 @@ process_exec (void *f_name) {
 	success = load (file_name, &_if);
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
 	if (!success)
+	{	palloc_free_page (file_name);
 		return -1;
-
+	}
+		
 	// 스택에 인자 넣기
     void **rspp = &_if.rsp;
     argument_stack(argv, argc, rspp);
@@ -210,6 +208,7 @@ process_exec (void *f_name) {
 
     hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
+	palloc_free_page(file_name);
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -269,7 +268,11 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	return -1;
+	// for simple tests
+    for (int i = 0; i < 100000000; i++)
+    {
+    }
+    return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
