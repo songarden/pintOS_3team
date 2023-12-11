@@ -22,7 +22,8 @@ int exec(const char *cmd_line);
 void exit(int status);
 void halt(void);
 int write(int fd, void *buffer, unsigned size);
-pid_t fork(const char *file, struct intr_frame *f);
+int fork(const char *file, struct intr_frame *f);
+int wait(tid_t child_tid);
 bool create_file(const char *file, unsigned initial_size);
 bool remove_file(const char *file);
 
@@ -60,9 +61,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	int syscall_num = f->R.rax; // rax에 존재하는 시스템콜 넘버 추출
 	switch (syscall_num){
 		case SYS_OPEN:
-			lock_acquire(&filesys_lock);
 			f->R.rax = open(f->R.rdi);
-			lock_release(&filesys_lock);
 			break;
 		
 		case SYS_EXEC:
@@ -91,6 +90,11 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		
 		case SYS_REMOVE:
 			f->R.rax = remove_file(f->R.rdi);
+
+		case SYS_WAIT:
+			f->R.rax = wait(f->R.rdi);
+			break;
+
 		
 
 	}
@@ -104,17 +108,16 @@ void check_addr(void *addr){
 
 int open(const char *file_name){
 	check_addr(file_name);
-
+	lock_acquire(&filesys_lock);
 	struct file *file = filesys_open(file_name);
 	if (file == NULL) {
 		return -1;
 	}
-
 	int fd = process_add_fd(file);
 	if (fd == -1){
 		file_close(file);
 	}
-
+	lock_release(&filesys_lock);
 	return fd;
 }
 
@@ -127,7 +130,7 @@ int exec(const char *cmd_line){
 		return TID_ERROR;
 	strlcpy (cmd_line_copy,cmd_line,PGSIZE);
 
-	if(process_exec(cmd_line) == -1){
+	if(process_exec(cmd_line_copy) == -1){
 		exit(-1);
 	}
 }
@@ -135,6 +138,9 @@ int exec(const char *cmd_line){
 void exit(int status){
 	struct thread *curr = thread_current ();
 	printf("%s: exit(%d)\n",curr->name,status);
+	if(curr->parent){
+		curr->parent->child_exist_status = status;
+	}
 	thread_exit();
 }
 
@@ -150,11 +156,16 @@ int write(int fd, void *buffer, unsigned size){
 	}
 }
 
-pid_t fork(const char *file, struct intr_frame *f){
+int fork(const char *file, struct intr_frame *f){
 	check_addr(file);
 	return process_fork(file,f);
-
 }
+
+int wait(tid_t child_tid){
+	struct thread *curr = thread_current();
+	return process_wait(child_tid);
+}
+
 
 bool create_file(const char *file, unsigned initial_size){
 	check_addr(file);
