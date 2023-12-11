@@ -18,27 +18,27 @@
             "command": [
                 "${workspaceFolder}/utils/pintos"
             ],
-            // "args": [
-            //     "--gdb",
-            //     "--",
-            //     "-q",
-            //     "-mlfqs",
-            //     "run",
-            //     "${input:test}"
-            // ],
             "args": [
                 "--gdb",
-                "-v",
-                "-k",
-                "-T", "60000",
-                "-m", "20",
-                "--fs-disk=10",
-                "-p", "tests/userprog/args-single:args-single",
                 "--",
                 "-q",
-                "-f", "run",
-                "'args-single test'"
+                "-mlfqs",
+                "run",
+                "${input:test}"
             ],
+            // "args": [
+            //     "--gdb",
+            //     "-v",
+            //     "-k",
+            //     "-T", "60000",
+            //     "-m", "20",
+            //     "--fs-disk=10",
+            //     "-p", "tests/userprog/args-single:args-single",
+            //     "--",
+            //     "-q",
+            //     "-f", "run",
+            //     "'args-single test'"
+            // ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"
             },

@@ -4,6 +4,7 @@
         "thread.h": "c",
         "stdio.h": "c",
         "filesys.h": "c",
-        "debug.h": "c"
+        "debug.h": "c",
+        "syscall.h": "c"
     }
 }
