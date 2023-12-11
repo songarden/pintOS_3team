@@ -79,6 +79,9 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
+// project1 : Alarm Clock
+static struct list sleep_list; // blocked state thread를 위한 별도의 list생성
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -115,6 +118,9 @@ thread_init (void) {
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+
+	list_init(&sleep_list); // init 시킬 때 sleep_list도 만들어줌
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -204,9 +210,10 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	/* Add to run queue. */
-	thread_unblock (t);
-
+    /* Add to ready_list. */
+    thread_unblock(t);
+    // project1 : priority schedule
+    thread_test_preemption(); //우선순위 비교해서 더 높으면 CPU 양보
 	return tid;
 }
 
@@ -240,8 +247,10 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
-	t->status = THREAD_READY;
+    // list_push_back(&ready_list, &t->elem);
+    // project1: priority schedule
+    list_insert_ordered(&ready_list, &t->elem, thread_compare_priority, 0);
+	t->status = THREAD_READY;			// thread의 status를 ready로 변경
 	intr_set_level (old_level);
 }
 
@@ -296,14 +305,17 @@ thread_exit (void) {
    may be scheduled again immediately at the scheduler's whim. */
 void
 thread_yield (void) {
-	struct thread *curr = thread_current ();
+	struct thread *curr = thread_current ();		// 현재 thread를 curr이라는 thread 구조체에 넣음
 	enum intr_level old_level;
 
 	ASSERT (!intr_context ());
-
-	old_level = intr_disable ();
-	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+	// 인터럽트 끔 - kernel thread를 사용하는 중에 외부 인터럽트 처리기의 interrupt 막기위해
+	old_level = intr_disable (); 		
+	if (curr != idle_thread)				// 현재 thread가 idle thread가 아니면
+		// list_push_back(&ready_list, &curr->elem); // ready_list의 맨 끝에 curr.elem을 넣음
+        // project1: priority schedule
+        // ready_list를 priority 기준 내림차순으로 정렬시킴
+        list_insert_ordered(&ready_list, &curr->elem, thread_compare_priority, 0);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -312,6 +324,9 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	// project1 : priority schedule
+	refresh_priority (); // 이거 추가
+    thread_test_preemption(); // priority가 변경되었으니까 우선순위 변경 확인
 }
 
 /* Returns the current thread's priority. */
@@ -409,6 +424,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	// priority donation
+    t->init_priority = priority;
+    t->wait_on_lock = NULL;
+    list_init (&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -587,4 +607,113 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+// project1 : Alarm Clock
+// thread의 blocked state 만들어줌
+void thread_sleep(int64_t ticks) // ticks는 일어날 시각을 말함
+{
+    struct thread *cur;
+    enum intr_level old_level;
+
+    old_level = intr_disable(); // interrupt 끔
+    cur = thread_current();
+
+    ASSERT(cur != idle_thread);
+
+    cur->wakeup = ticks;                     // 언제 깰건지 저장
+    list_push_back(&sleep_list, &cur->elem); // cur.elem을 sleep_list의 끝에 넣음
+    thread_block();                             // state를 block상태로 만들어주고, schedule돌림
+
+    intr_set_level(old_level); // interrupt 킴
+}
+
+// project1 : Alarm Clock
+// sleep thread를 깨운다.
+void thread_awake(int64_t ticks) // 이 ticks는 계속 증가하는 ticks에서 정확한 tick을 말함
+{
+    struct list_elem *e = list_begin(&sleep_list);
+    while (e != list_end(&sleep_list))
+    {
+        struct thread *t = list_entry(e, struct thread, elem);
+        if (t->wakeup <= ticks) // 현재 시각이 일어날 시간을 지났으면 -> 일어나!!
+        {
+            e = list_remove(e);
+            thread_unblock(t);
+        }
+        else
+        {
+            e = list_next(e);
+        }
+    }
+}
+
+// 우선순위 비교 함수
+bool 
+thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED)
+{
+    return list_entry (l, struct thread, elem)->priority
+         > list_entry (s, struct thread, elem)->priority;
+}
+
+// running thread와 비교를 통해 우선순위가 더 높다면 선점(preemption)을 할 수 있게 하는 함수
+void thread_test_preemption(void)
+{
+    if (!list_empty(&ready_list) && thread_current()->priority 
+        < list_entry(list_front(&ready_list), struct thread, elem)->priority)
+        thread_yield();
+}
+
+// priority donation 
+// donation_elem에 대해 priority 비교를 해주는 함수
+bool
+thread_compare_donate_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+    return list_entry (a, struct thread, donation_elem)-> priority
+                > list_entry (b, struct thread, donation_elem) -> priority;
+}
+
+// lock을 점유하고 있는 holder thread에게 priority를 넘겨주는 함수
+void 
+donate_priority (void)
+{
+    int depth;
+    struct thread *cur = thread_current ();
+
+    for (depth = 0; depth < 8; depth++) { // 최대깊이 8(GITBOOK예시로 나와있음)
+        if (!cur->wait_on_lock) break;
+            struct thread *holder = cur->wait_on_lock->holder;
+            holder->priority = cur->priority;
+            cur = holder; // 우선순위가 낮았던 holder부터 실행을 해야하므로 cur를 holder로 바꿔서 지금 실행.
+    }
+}
+
+// 나에게 priority를 빌려준 thread들을 donations list에서 제거하고, priority를 재설정하는 함수
+void
+remove_with_lock (struct lock *lock)
+{
+    struct list_elem *e;
+    struct thread *cur = thread_current ();
+
+    for (e = list_begin (&cur->donations); e != list_end (&cur->donations); 
+    e = list_next (e)) {
+        struct thread *t = list_entry (e, struct thread, donation_elem);
+        if (t->wait_on_lock == lock)
+            list_remove (&t->donation_elem);
+    }
+}
+
+// donations 리스트가 비어있다면 init_priority로 초기화되고, donations 리스트에 thread가 남아있다면,
+// 남아있는 thread 중에서 가장 높은 priority를 가져오는 함수
+void
+refresh_priority (void) 
+{
+    struct thread *cur = thread_current ();
+    cur->priority = cur->init_priority;
+    if (!list_empty (&cur->donations)) {
+        list_sort (&cur->donations, thread_compare_donate_priority, 0);
+        struct thread *front = list_entry (list_front (&cur->donations), struct thread, donation_elem);
+        if (front->priority > cur->priority)
+            cur->priority = front->priority;
+    }
 }

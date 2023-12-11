@@ -95,6 +95,15 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	// project1 : Alarm Clock
+    int64_t wakeup; // 자신이 일어나야할 시각 각인
+
+	// priority donation
+    int init_priority;  // 최초 스레드 우선순위 저장.
+    struct lock *wait_on_lock;  // 현재 thread가 요청했는데 받지못한 lock. 기다리는중
+    struct list donations; // 자신에게 priority 를 나누어준 thread의 list
+    struct list_elem donation_elem; // 위의 thread list를 관리하기위한 element. thread 구조체의 elem과 구분.
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -143,4 +152,16 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+// 함수의 원형 선언
+void thread_sleep(int64_t ticks);
+void thread_awake(int64_t ticks);
+
+bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED);
+void thread_test_preemption(void);
+
+// priority donation
+bool thread_compare_donate_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void donate_priority (void);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
 #endif /* threads/thread.h */
