@@ -84,16 +84,18 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
 	struct thread *curr = thread_current();
 	struct thread *child;
+	//여기서 인터럽트 프레임 복사
 	memcpy(&curr->parent_if,if_,sizeof(struct intr_frame));
 	tid_t pid = thread_create (name,
 			PRI_DEFAULT, __do_fork, curr);
-	if (pid == TID_ERROR){
+	
+	if (pid == TID_ERROR){ // thread_create fail 시
 		return TID_ERROR;
 	}
-	if ((child = process_get_child(pid)) == NULL){
+	if ((child = process_get_child(pid)) == NULL){ // thread create는 됬는데 parent 스레드에 있는 자식list에 삽입이 안되었을 시
 		return TID_ERROR;
 	}
-	sema_down(&child->dupl_sema);
+	sema_down(&child->dupl_sema); //자식을 찾은 경우 fork task thread가 끝날때까지 wait
 	return pid;
 }
 
@@ -203,13 +205,13 @@ __do_fork (void *aux) {
 		}
 	}
 	current -> next_fd = parent -> next_fd;
-	current -> parent = parent;
+	// current -> parent = parent;
 	sema_up(&current->dupl_sema);
 	process_init();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
-		do_iret (&if_);
+		do_iret (&if_); //여기서 fork 과정은 끝이나고 fork하는 thread는 exit 대신 context switching 된다.
 error:
 	thread_exit ();
 }
@@ -223,7 +225,6 @@ process_exec (void *f_name) {
 	bool success;
 
 
-
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
@@ -231,7 +232,6 @@ process_exec (void *f_name) {
 	struct intr_frame _if;
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
-	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
 	process_cleanup ();
@@ -245,14 +245,18 @@ process_exec (void *f_name) {
 	f_copy = strtok_r(f_copy," ",&save_ptr);
 	/* And then load the binary */
 	success = load (f_copy, &_if);
-	parsing_file_input(file_name,&_if);
-	// hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
+	
 	/* If load failed, quit. */
 	palloc_free_page (f_copy);
-	palloc_free_page (file_name);
-	if (!success)
+	if (!success){
+		palloc_free_page (file_name);
 		return -1;
+	}
 
+	parsing_file_input(file_name,&_if); //file이 있는 경우에만 parsing하도록
+	// hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
+	palloc_free_page (file_name);
+	_if.eflags = FLAG_IF | FLAG_MBS; //인터럽트 플래그는 나중에 설정
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -269,7 +273,7 @@ process_exec (void *f_name) {
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) {
+process_wait (tid_t child_tid) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
@@ -277,38 +281,42 @@ process_wait (tid_t child_tid UNUSED) {
 		return -1;
 	}
 	struct thread *curr = thread_current();
-	struct thread *child;
-	struct list_elem *elem;
-	for(elem = list_begin(&curr->child_list);elem != list_end(&curr->child_list);elem = list_next(elem)){
-		child = list_entry(elem,struct thread,child_elem);
-		if (child->tid == child_tid){
-			break;
-		}
-		child = NULL;
-	}
+
+	struct thread *child = process_get_child(child_tid);
+	
 	if (child == NULL){
 		return -1;
 	}
 	sema_down(&child->child_wait_sema);
-	if(curr->child_exist_status == NULL){
-		return -1;
-	}
-	return curr->child_exist_status;
+	int child_exist_status = child->exist_status;
+	list_remove(&child->child_elem);
+	sema_up(&child->exit_sema);
+	return child_exist_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+	if (curr->loading_file){
+		file_close(curr->loading_file);
+	}
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	for (int i=2;i<=curr->next_fd;i++){
-		file_close(curr->fdt[i]);
+	if(curr->next_fd >=2){
+		for(int i =2;i<=curr->next_fd;i++){
+			if(curr->fdt[i] == NULL){
+				continue;
+			}
+			file_close(curr->fdt[i]);
+		}
 	}
+	
 	palloc_free_page(curr->fdt);
 	process_cleanup ();
+	sema_down(&curr->exit_sema);
 }
 
 /* Free the current process's resources. */
@@ -452,7 +460,6 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
-	file_deny_write(file); // 파일 복사 중 쓰기 방지
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -517,7 +524,8 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-
+	file_deny_write(file); // 파일 복사 중 쓰기 방지
+	t->loading_file = file;
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
@@ -534,7 +542,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
 	return success;
 }
 

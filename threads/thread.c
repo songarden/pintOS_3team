@@ -227,7 +227,6 @@ thread_create (const char *name, int priority,
 	if(t->fdt == NULL){
 		return TID_ERROR;
 	}
-
 	list_push_back(&thread_current()->child_list,&t->child_elem);
 	t->parent = thread_current();
 	
@@ -329,8 +328,8 @@ void
 thread_exit (void) {
 	ASSERT (!intr_context ());
 	struct thread *curr = thread_current ();
-	sema_up(&curr->dupl_sema);
-	sema_up(&curr->child_wait_sema);
+	
+	
 
 #ifdef USERPROG
 	process_exit ();
@@ -639,6 +638,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->next_fd = 2;
 	list_init(&t->child_list);
 	sema_init(&t->child_wait_sema,0);
+	sema_init(&t->exit_sema,0);
 	sema_init(&t->dupl_sema,0);
 }
 
