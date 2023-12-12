@@ -116,12 +116,15 @@ struct thread {
 
 	struct intr_frame parent_if;
 	struct thread *parent;
-	int child_exist_status;
+	int exist_status;
 	struct list child_list;
 	struct list_elem child_elem;
 
 	struct semaphore dupl_sema;
 	struct semaphore child_wait_sema;
+	struct semaphore exit_sema;
+
+	struct file *loading_file;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

@@ -5,6 +5,17 @@
         "stdio.h": "c",
         "filesys.h": "c",
         "debug.h": "c",
-        "syscall.h": "c"
+        "syscall.h": "c",
+        "mmu.h": "c",
+        "console.h": "c",
+        "vaddr.h": "c",
+        "init.h": "c",
+        "inttypes.h": "c",
+        "process.h": "c",
+        "file.h": "c",
+        "off_t.h": "c",
+        "inode.h": "c",
+        "disk.h": "c",
+        "malloc.h": "c"
     }
 }
