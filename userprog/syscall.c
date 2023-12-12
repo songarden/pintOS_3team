@@ -287,14 +287,12 @@ void close (int fd){
 	if (fd < 2 || curr->next_fd < fd){
 		exit(-1);
 	}
-	// lock_acquire(&filesys_lock);
 	struct file *closing_file = curr->fdt[fd];
 	if(closing_file != NULL){
 		file_close(curr->fdt[fd]);
 		curr->fdt[fd] = NULL;
 	}
 	else{
-		// lock_release(&filesys_lock);
 		exit(-1);
 	}
 }
