@@ -63,6 +63,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_READ:
 	        f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 	        break; 
+        case SYS_WRITE:      
+	        f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -149,4 +152,26 @@ int read (int fd, void *buffer, unsigned size) {
 		return read_byte;
 	}
 	return -1;
+}
+
+int write (int fd UNUSED, const void *buffer, unsigned size) {
+	check_address(buffer);
+
+	if (fd == 0) // STDIN일때 -1
+		return -1;
+
+	if (fd == 1) {
+		lock_acquire(&filesys_lock);
+		putbuf(buffer, size);
+		lock_release(&filesys_lock);
+		return size;
+	}
+
+	struct file *file = thread_current()->fdt[fd];
+	if (file) {
+		lock_acquire(&filesys_lock);
+		int write_byte = file_write(file, buffer, size);
+		lock_release(&filesys_lock);
+		return write_byte;
+	}
 }
