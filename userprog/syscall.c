@@ -8,6 +8,12 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 
+// * USERPROG 추가
+#include "threads/palloc.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
@@ -217,12 +223,6 @@ void close (int fd) {
 	}
 }
 
-void check_address(void *addr) {
-	struct thread *cur = thread_current();
-	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
-		exit(-1);
-}
-
 int exec (const char *file_name) {
 	check_address(file_name);
 
@@ -246,4 +246,10 @@ int wait (tid_t pid) {
 int fork (const char *thread_name) {
 	check_address(thread_name);
 	return process_fork(thread_name, &thread_current()->ptf);
+}
+
+void check_address(void *addr) {
+	struct thread *cur = thread_current();
+	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
+		exit(-1);
 }
