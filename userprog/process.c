@@ -428,6 +428,13 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	argument_stack(argv, cnt, &if_->rsp);
+	if_->R.rdi = cnt;
+	if_->R.rsi = if_->rsp + 8;
+
+	// * 추가
+	t->running_file = file;
+	file_deny_write(file);
 
 	success = true;
 
