@@ -18,14 +18,19 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "userprog/syscall.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
+
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+
+int STDIN = 1;
+int STDOUT = 2;
 
 /* General process initializer for initd and other process. */
 static void
@@ -131,67 +136,123 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 }
 #endif
 
-/* A thread function that copies parent's execution context.
- * Hint) parent->tf does not hold the userland context of the process.
- *       That is, you are required to pass second argument of process_fork to
- *       this function. */
-static void
-__do_fork (void *aux) {
-	struct intr_frame if_;
-	struct thread *parent = (struct thread *) aux;
-	struct thread *current = thread_current ();
-	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if = &parent->ptf;
-	bool succ = true;
+// /* A thread function that copies parent's execution context.
+//  * Hint) parent->tf does not hold the userland context of the process.
+//  *       That is, you are required to pass second argument of process_fork to
+//  *       this function. */
+// static void
+// __do_fork (void *aux) {
+// 	struct intr_frame if_;
+// 	struct thread *parent = (struct thread *) aux;
+// 	struct thread *current = thread_current ();
+// 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
+// 	struct intr_frame *parent_if = &parent->ptf;
+// 	bool succ = true;
 
-	/* 1. Read the cpu context to local stack. */
-	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-	if_.R.rax = 0;
+// 	/* 1. Read the cpu context to local stack. */
+// 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+// 	if_.R.rax = 0;
 
 
-	/* 2. Duplicate PT */
-	current->pml4 = pml4_create();
-	if (current->pml4 == NULL)
-		goto error;
+// 	/* 2. Duplicate PT */
+// 	current->pml4 = pml4_create();
+// 	if (current->pml4 == NULL)
+// 		goto error;
 
-	process_activate (current);
-#ifdef VM
-	supplemental_page_table_init (&current->spt);
-	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
-		goto error;
-#else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
-		goto error;
-#endif
+// 	process_activate (current);
+// #ifdef VM
+// 	supplemental_page_table_init (&current->spt);
+// 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
+// 		goto error;
+// #else
+// 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
+// 		goto error;
+// #endif
 
-	/* TODO: Your code goes here.
-	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
-	 * TODO:       in include/filesys/file.h. Note that parent should not return
-	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
+// 	/* TODO: Your code goes here.
+// 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
+// 	 * TODO:       in include/filesys/file.h. Note that parent should not return
+// 	 * TODO:       from the fork() until this function successfully duplicates
+// 	 * TODO:       the resources of parent.*/
 
-	int cnt = 2;
-	struct file **table = parent->fdt;
-	while (cnt < 128) {
-		if (table[cnt]) {
-			current->fdt[cnt] = file_duplicate(table[cnt]);
-		} else {
-			current->fdt[cnt] = NULL;
-		}
-		cnt++;
-	}
-	current->next_fd = parent->next_fd;
+// 	int cnt = 2;
+// 	struct file **table = parent->fdt;
+// 	while (cnt < 128) {
+// 		if (table[cnt]) {
+// 			current->fdt[cnt] = file_duplicate(table[cnt]);
+// 		} else {
+// 			current->fdt[cnt] = NULL;
+// 		}
+// 		cnt++;
+// 	}
+// 	current->next_fd = parent->next_fd;
 
- 	sema_up(&parent->sema_fork);
+//  	sema_up(&parent->sema_fork);
 
-  	process_init ();
-	/* Finally, switch to the newly created process. */
-	if (succ)
-		do_iret (&if_);
+//   	process_init ();
+// 	/* Finally, switch to the newly created process. */
+// 	if (succ)
+// 		do_iret (&if_);
+
+// error:
+// 	sema_up(&parent->sema_fork);
+// 	exit(TID_ERROR);
+// }
+
+static void __do_fork(void *aux) {
+    struct intr_frame if_;
+    struct thread *parent = (struct thread *) aux;
+    struct thread *current = thread_current();
+    struct intr_frame *parent_if = &parent->ptf;
+    bool succ = true;
+
+    /* 1. 부모 프로세스의 CPU 컨텍스트를 복사. */
+    memcpy(&if_, parent_if, sizeof(struct intr_frame));
+    if_.R.rax = 0;  // 자식 프로세스의 fork 리턴 값은 0
+
+    /* 2. 페이지 테이블 복제 */
+    current->pml4 = pml4_create();
+    if (current->pml4 == NULL) goto error;
+    process_activate(current);
+
+    /* 가상 메모리 페이지 테이블 복제 */
+    #ifdef VM
+    supplemental_page_table_init(&current->spt);
+    if (!supplemental_page_table_copy(&current->spt, &parent->spt)) goto error;
+    #else
+    if (!pml4_for_each(parent->pml4, duplicate_pte, parent)) goto error;
+    #endif
+
+    /* 파일 디스크립터 테이블 복제 */
+    current->stdin_count = parent->stdin_count;
+    current->stdout_count = parent->stdout_count;
+    int cnt = 2;
+    struct file **table = parent->fdt;
+    while (cnt < 128) {
+        if (table[cnt]) {
+            if (table[cnt] == STDIN || table[cnt] == STDOUT) {
+                current->fdt[cnt] = table[cnt];
+            } else {
+                current->fdt[cnt] = file_duplicate(table[cnt]);
+                if (current->fdt[cnt]) {
+                    current->fdt[cnt]->dup_count = 0;  // 초기 dup_count를 0으로 설정
+                }
+            }
+        } else {
+            current->fdt[cnt] = NULL;
+        }
+        cnt++;
+    }
+    current->next_fd = parent->next_fd;
+
+    sema_up(&parent->sema_fork);  // 부모 프로세스에 신호를 보냄
+
+    process_init();  // 프로세스 초기화
+    if (succ) do_iret(&if_);  // 자식 프로세스로 컨텍스트 전환
 
 error:
-	sema_up(&parent->sema_fork);
-	exit(TID_ERROR);
+    sema_up(&parent->sema_fork);  // 에러 시 부모에게 알림
+    exit(TID_ERROR);  // 에러 처리
 }
 
 /* Switch the current execution context to the f_name.

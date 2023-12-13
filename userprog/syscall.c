@@ -184,27 +184,66 @@ int read (int fd, void *buffer, unsigned size) {
 	return -1;
 }
 
-int write (int fd UNUSED, const void *buffer, unsigned size) {
-	check_address(buffer);
+// int write (int fd UNUSED, const void *buffer, unsigned size) {
+// 	check_address(buffer);
 
-	if (fd < 1 ) // STDIN일때 -1
-		return -1;
+// 	if (fd < 1 ) // STDIN일때 -1
+// 		return -1;
 
-	if (fd == 1) {
-		lock_acquire(&filesys_lock);
-		putbuf(buffer, size);
-		lock_release(&filesys_lock);
-		return size;
-	}
+// 	if (fd == 1) {
+// 		lock_acquire(&filesys_lock);
+// 		putbuf(buffer, size);
+// 		lock_release(&filesys_lock);
+// 		return size;
+// 	}
 
-	struct file *file = thread_current()->fdt[fd];
-	if (file) {
-		lock_acquire(&filesys_lock);
-		int write_byte = file_write(file, buffer, size);
-		lock_release(&filesys_lock);
-		return write_byte;
-	}
-	else return -1;
+// 	struct file *file = thread_current()->fdt[fd];
+// 	if (file) {
+// 		lock_acquire(&filesys_lock);
+// 		int write_byte = file_write(file, buffer, size);
+// 		lock_release(&filesys_lock);
+// 		return write_byte;
+// 	}
+// 	else return -1;
+// }
+
+int write(int fd, const void *buffer, unsigned size) {
+    check_address(buffer); // Validate the buffer address.
+
+    struct thread *cur = thread_current(); // Get the current thread context.
+    struct file *file_fd = cur->fdt[fd];   // Retrieve the file object for the given file descriptor.
+
+    // If the file descriptor is for STDIN, return -1 as STDIN is not writable.
+    if (fd < 1 || file_fd == STDIN) { 
+        return -1;
+    }
+
+    // Handling standard output (STDOUT)
+    if (fd == 1 || file_fd == STDOUT) {
+        if (cur->stdout_count == 0) { // Check if STDOUT is available.
+            // STDOUT is not available. Handle the error.
+            NOT_REACHED(); // This is typically used to indicate an unexpected error state.
+            remove_file_from_fdt(fd); // Remove the file descriptor from the file descriptor table.
+            return -1;
+        }
+
+        // Write to STDOUT.
+        lock_acquire(&filesys_lock);
+        putbuf(buffer, size); // Write the buffer to standard output.
+        lock_release(&filesys_lock);
+        return size; // Return the number of bytes written.
+    }
+
+    // Writing to a regular file.
+    if (file_fd) {
+        lock_acquire(&filesys_lock);
+        int write_byte = file_write(file_fd, buffer, size); // Write to the file.
+        lock_release(&filesys_lock);
+        return write_byte; // Return the number of bytes written to the file.
+    }
+
+    // If the file descriptor does not correspond to a valid file, return -1.
+    return -1;
 }
 
 void seek (int fd, unsigned position) {
@@ -219,14 +258,55 @@ unsigned tell (int fd) {
 		return file_tell(curfile);
 }
 
-void close (int fd) {
-	struct file * file = thread_current()->fdt[fd];
-	if (file) {
-		lock_acquire(&filesys_lock);
-		thread_current()->fdt[fd] = NULL;
-		file_close(file);
-		lock_release(&filesys_lock);
-	}
+// void close (int fd) {
+// 	struct file * file = thread_current()->fdt[fd];
+// 	if (file) {
+// 		lock_acquire(&filesys_lock);
+// 		thread_current()->fdt[fd] = NULL;
+// 		file_close(file);
+// 		lock_release(&filesys_lock);
+// 	}
+// }
+
+void close(int fd) {
+    struct thread *cur = thread_current();
+    struct file *file_fd = cur->fdt[fd];
+
+    if (file_fd == NULL) {
+        return; // If there's no file associated with fd, there's nothing to close.
+    }
+
+    // Handling closing of standard input (STDIN)
+    if (fd == 0 || file_fd == STDIN) {
+        cur->stdin_count--;
+        if (cur->stdin_count > 0) {
+            return; // Don't close if there are still references to STDIN.
+        }
+    }
+
+    // Handling closing of standard output (STDOUT)
+    else if (fd == 1 || file_fd == STDOUT) {
+        cur->stdout_count--;
+        if (cur->stdout_count > 0) {
+            return; // Don't close if there are still references to STDOUT.
+        }
+    }
+
+    // For regular files
+    else {
+        if (file_fd->dup_count > 0) {
+            file_fd->dup_count--;
+            if (file_fd->dup_count > 0) {
+                return; // Don't close if there are still duplicated references.
+            }
+        }
+    }
+
+    // Closing the file
+    lock_acquire(&filesys_lock);
+    cur->fdt[fd] = NULL; // Remove the file descriptor from the file descriptor table.
+    file_close(file_fd); // Close the file.
+    lock_release(&filesys_lock);
 }
 
 int exec (const char *file_name) {
@@ -271,3 +351,4 @@ int dup2(int oldfd, int newfd) {
     cur->fdt[newfd] = file_duplicate(cur->fdt[oldfd]);
     return newfd;
 }
+
