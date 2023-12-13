@@ -96,6 +96,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		
 		case SYS_REMOVE:
 			f->R.rax = remove_file(f->R.rdi);
+			break;
 
 		case SYS_WAIT:
 			f->R.rax = wait(f->R.rdi);
@@ -138,11 +139,10 @@ int open(const char *file_name){
 		return -1;
 	}
 	int fd = process_add_fd(file);
-	if (fd == -1){
-		lock_release(&filesys_lock);
-		close(file);
-	}
 	lock_release(&filesys_lock);
+	if (fd == -1){
+		file_close(file);
+	}
 	return fd;
 }
 
@@ -162,8 +162,8 @@ int exec(const char *cmd_line){
 void exit(int status){
 	struct thread *curr = thread_current ();
 	printf("%s: exit(%d)\n",curr->name,status);
+	curr->exit_status = status;
 	sema_up(&curr->child_wait_sema);
-	curr->exist_status = status;
 	thread_exit();
 }
 
@@ -173,19 +173,20 @@ void halt(void){
 
 int write(int fd, void *buffer, unsigned size){
 	check_addr(buffer);
+
 	struct thread *curr = thread_current();
 	if (fd == 1){
 		putbuf((char*)buffer,(size_t)size);
 		return size;
 	}
-	if(fd < 1 || fd > curr->next_fd){
+	if(fd < 1){
+		return -1;
+	}
+	
+	if(curr->fdt[fd] == NULL){
 		return -1;
 	}
 	lock_acquire(&filesys_lock);
-	if(curr->fdt[fd] == NULL){
-		lock_release(&filesys_lock);
-		return -1;
-	}
 	int write_size = (int)file_write(curr->fdt[fd],buffer,(off_t)size);
 	lock_release(&filesys_lock);
 	return write_size;
@@ -193,7 +194,6 @@ int write(int fd, void *buffer, unsigned size){
 }
 
 int fork(const char *file, struct intr_frame *f){
-	check_addr(file);
 	int fork_pid = process_fork(file,f);
 	return fork_pid;
 }
@@ -207,14 +207,7 @@ int wait(tid_t child_tid){
 bool create_file(const char *file, unsigned initial_size){
 	check_addr(file);
 	lock_acquire(&filesys_lock);
-	// char *file_name_copy = palloc_get_page(0);
-	// if (file_name_copy == NULL)
-	// 	return TID_ERROR;
-	// strlcpy (file_name_copy,file,PGSIZE);
-
 	bool success = filesys_create(file,initial_size);
-	// bool success = filesys_create(file_name_copy,initial_size);
-	// palloc_free_page(file_name_copy);
 	lock_release(&filesys_lock);
 	return success;
 }
@@ -242,14 +235,13 @@ int read(int fd, void *buffer, unsigned size){
 		int read_size = strlen(input_getc());
 		return read_size;
 	}
-	if(fd == 1 || fd < 0 || curr->next_fd < fd){
+	if(fd == 1 || fd < 0){
+		return -1;
+	}
+	if(curr->fdt[fd] == NULL){
 		return -1;
 	}
 	lock_acquire(&filesys_lock);
-	if(curr->fdt[fd] == NULL){
-		lock_release(&filesys_lock);
-		return -1;
-	}
 	struct file *file = curr->fdt[fd];
 	int read_size = (int)file_read(file,buffer,(off_t)size);
 	lock_release(&filesys_lock);
@@ -263,18 +255,14 @@ void seek (int fd, unsigned position){
 		return;
 	}
 	if (fd >1 && curr->fdt[fd] != NULL){
-		lock_acquire(&filesys_lock);
 		file_seek(curr->fdt[fd],(off_t)position);
-		lock_release(&filesys_lock);
 	}
 }
 
 unsigned tell (int fd){
 	struct thread *curr = thread_current();
 	if (fd >1 && curr->fdt[fd] != NULL){
-		lock_acquire(&filesys_lock);
 		unsigned point = (unsigned)file_tell(curr->fdt[fd]);
-		lock_release(&filesys_lock);
 		return point;
 	}
 	else{
@@ -284,15 +272,12 @@ unsigned tell (int fd){
 
 void close (int fd){
 	struct thread *curr = thread_current ();
-	if (fd < 2 || curr->next_fd < fd){
-		exit(-1);
+	if (fd < 2){
+		return;
 	}
 	struct file *closing_file = curr->fdt[fd];
 	if(closing_file != NULL){
 		file_close(curr->fdt[fd]);
 		curr->fdt[fd] = NULL;
-	}
-	else{
-		exit(-1);
 	}
 }

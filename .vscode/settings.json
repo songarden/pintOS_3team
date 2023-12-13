@@ -16,6 +16,7 @@
         "off_t.h": "c",
         "inode.h": "c",
         "disk.h": "c",
-        "malloc.h": "c"
+        "malloc.h": "c",
+        "synch.h": "c"
     }
 }
