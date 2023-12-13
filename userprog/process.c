@@ -232,7 +232,12 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
+	sema_up(&curr->sema_wait);
+	sema_down(&curr->sema_exit);
+
+	palloc_free_page(table);
 	process_cleanup ();
+
 }
 
 /* Free the current process's resources. */
