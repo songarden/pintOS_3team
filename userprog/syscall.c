@@ -48,6 +48,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_EXIT:
 	        exit(f->R.rdi);
 	        break;
+        case SYS_CREATE:
+	        f->R.rax = create(f->R.rdi, f->R.rsi);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -70,4 +73,13 @@ void exit(int status) {
 	cur->exit_status = status;
 	printf("%s: exit(%d)\n", cur->name, status);
 	thread_exit();
+}
+
+bool create (const char *file, unsigned initial_size) {
+	/* 
+	* 파일 이름과 크기에 해당하는 파일 생성
+	* 파일 생성 성공 시 true 반환, 실패 시 false 반환
+	*/
+	check_address(file);
+	return filesys_create(file, initial_size);
 }
