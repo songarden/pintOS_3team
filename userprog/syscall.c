@@ -78,6 +78,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_EXEC:
 	        exec(f->R.rdi);
 	        break;
+        case SYS_WAIT:
+	        f->R.rax = wait(f->R.rdi);
+	        break; 
         default:
 			exit(-1);
 			break;
@@ -230,4 +233,8 @@ int exec (const char *file_name) {
 		exit(-1);
 		return -1;
 	}
+}
+
+int wait (tid_t pid) {
+  	return process_wait(pid);
 }
