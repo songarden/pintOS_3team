@@ -259,10 +259,23 @@ process_wait (tid_t child_tid UNUSED) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+  	struct file **table = curr->fdt;
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+
+	if (curr->running_file)
+		file_close(curr->running_file);
+		
+	int cnt = 2;
+	while (cnt < 128) {
+		if (table[cnt]) { // != 0 && table[cnt] != NULL
+			file_close(table[cnt]);
+			table[cnt] = NULL;
+		}
+		cnt++;
+	}
 
 	sema_up(&curr->sema_wait);
 	sema_down(&curr->sema_exit);

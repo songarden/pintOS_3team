@@ -41,6 +41,8 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+            
+    lock_init(&filesys_lock);
 }
 
 /* The main system call interface */
@@ -88,7 +90,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	        f->R.rax = wait(f->R.rdi);
 	        break; 
         case SYS_FORK:
-	        memcpy(&thread_current()->ptf, f, sizeof(struct intr_frame));
+	        memcpy(&thread_current()->fdt, f, sizeof(struct intr_frame));
 	        f->R.rax = fork(f->R.rdi);
 	        break;
         default:
@@ -245,7 +247,7 @@ int wait (tid_t pid) {
 
 int fork (const char *thread_name) {
 	check_address(thread_name);
-	return process_fork(thread_name, &thread_current()->ptf);
+	return process_fork(thread_name, &thread_current()->fdt);
 }
 
 void check_address(void *addr) {
