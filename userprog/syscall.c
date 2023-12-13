@@ -69,6 +69,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_SEEK:
 	        seek(f->R.rdi, f->R.rsi);
 	        break;
+        case SYS_TELL:
+	        f->R.rax = tell(f->R.rdi);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -183,4 +186,10 @@ void seek (int fd, unsigned position) {
 	struct file *curfile = thread_current()->fdt[fd];
 	if (curfile)
 		file_seek(curfile, position);
+}
+
+unsigned tell (int fd) {
+	struct file *curfile = thread_current()->fdt[fd];
+	if (curfile)
+		return file_tell(curfile);
 }
