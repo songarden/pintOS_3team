@@ -134,12 +134,12 @@ int open(const char *file_name){
 	check_addr(file_name);
 	lock_acquire(&filesys_lock);
 	struct file *file = filesys_open(file_name);
+	lock_release(&filesys_lock);
 	if (file == NULL) {
-		lock_release(&filesys_lock);
 		return -1;
 	}
 	int fd = process_add_fd(file);
-	lock_release(&filesys_lock);
+	
 	if (fd == -1){
 		file_close(file);
 	}
@@ -151,8 +151,9 @@ int exec(const char *cmd_line){
 
 	char *cmd_line_copy;
 	cmd_line_copy = palloc_get_page(0);
-	if (cmd_line_copy == NULL)
+	if (cmd_line_copy == NULL){
 		exit(-1);
+	}
 	strlcpy (cmd_line_copy,cmd_line,PGSIZE);
 	if(process_exec(cmd_line_copy) == -1){
 		exit(-1);
