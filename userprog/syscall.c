@@ -66,6 +66,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_WRITE:      
 	        f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 	        break;
+        case SYS_SEEK:
+	        seek(f->R.rdi, f->R.rsi);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -174,4 +177,10 @@ int write (int fd UNUSED, const void *buffer, unsigned size) {
 		lock_release(&filesys_lock);
 		return write_byte;
 	}
+}
+
+void seek (int fd, unsigned position) {
+	struct file *curfile = thread_current()->fdt[fd];
+	if (curfile)
+		file_seek(curfile, position);
 }
