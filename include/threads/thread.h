@@ -30,7 +30,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 #define F (1<<14)                       /* 17.14 소수점 표현의 1*/
-#define FDT_PAGES 2
+#define FDT_PAGES 1
 #define FDT_CNT_LIMIT 128
 
 
@@ -115,8 +115,7 @@ struct thread {
 	int next_fd;
 
 	struct intr_frame parent_if;
-	struct thread *parent;
-	int exist_status;
+	int exit_status;
 	struct list child_list;
 	struct list_elem child_elem;
 

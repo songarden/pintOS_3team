@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "userprog/syscall.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -58,8 +59,11 @@ process_create_initd (const char *file_name) {
 	strtok_r(file_name," ",&save_ptr);
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
+
+	if(tid == TID_ERROR){
+		palloc_free_page(fn_copy);
+	}
+
 	return tid;
 }
 
@@ -83,19 +87,22 @@ tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
 	struct thread *curr = thread_current();
-	struct thread *child;
 	//여기서 인터럽트 프레임 복사
 	memcpy(&curr->parent_if,if_,sizeof(struct intr_frame));
+
 	tid_t pid = thread_create (name,
 			PRI_DEFAULT, __do_fork, curr);
 	
 	if (pid == TID_ERROR){ // thread_create fail 시
 		return TID_ERROR;
 	}
-	if ((child = process_get_child(pid)) == NULL){ // thread create는 됬는데 parent 스레드에 있는 자식list에 삽입이 안되었을 시
+
+	struct thread *child = process_get_child(pid);
+	sema_down(&child->dupl_sema); //자식을 찾은 경우 fork task thread가 끝날때까지 wait
+	if(child->exit_status == TID_ERROR){
+		sema_up(&child->exit_sema);
 		return TID_ERROR;
 	}
-	sema_down(&child->dupl_sema); //자식을 찾은 경우 fork task thread가 끝날때까지 wait
 	return pid;
 }
 
@@ -144,8 +151,9 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-	writable = is_writable(pte);
 	memcpy(newpage,parent_page,PGSIZE);
+	writable = is_writable(pte);
+	
 	
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
@@ -176,8 +184,9 @@ __do_fork (void *aux) {
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
-	if (current->pml4 == NULL)
+	if (current->pml4 == NULL){
 		goto error;
+	}
 
 	process_activate (current);
 #ifdef VM
@@ -185,8 +194,10 @@ __do_fork (void *aux) {
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
 #else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
+	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)){
 		goto error;
+	}
+		
 #endif
 
 	/* TODO: Your code goes here.
@@ -194,26 +205,35 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
-	if(parent->next_fd >= 2){
-		for (int i =2;i<=parent->next_fd;i++){
-			struct file *file = parent->fdt[i];
-			if (file == NULL){
-				continue;
-			}
-			struct file *new_file = file_duplicate(file);
-			current -> fdt[i] = new_file;
+
+	
+	for (int i = 0; i < FDT_CNT_LIMIT; i++) {
+
+		if (i<2){
+			current->fdt[i] = i;
+			continue;
 		}
+		
+		struct file *file = parent->fdt[i];
+
+		if (file == NULL) {
+			continue;
+		}
+		file = file_duplicate(file);
+		current->fdt[i] = file;
 	}
+	
 	current -> next_fd = parent -> next_fd;
-	// current -> parent = parent;
+	
 	sema_up(&current->dupl_sema);
 	process_init();
-
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret (&if_); //여기서 fork 과정은 끝이나고 fork하는 thread는 exit 대신 context switching 된다.
 error:
-	thread_exit ();
+	succ =false;
+	sema_up(&current->dupl_sema);
+	exit(-1);
 }
 
 /* Switch the current execution context to the f_name.
@@ -224,7 +244,7 @@ process_exec (void *f_name) {
 	char *buf;
 	bool success;
 
-
+	
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
@@ -232,9 +252,11 @@ process_exec (void *f_name) {
 	struct intr_frame _if;
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
+	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
 	process_cleanup ();
+	
 
 	char *save_ptr;
 	char *f_copy;
@@ -256,7 +278,7 @@ process_exec (void *f_name) {
 	parsing_file_input(file_name,&_if); //file이 있는 경우에만 parsing하도록
 	// hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
 	palloc_free_page (file_name);
-	_if.eflags = FLAG_IF | FLAG_MBS; //인터럽트 플래그는 나중에 설정
+
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -288,7 +310,7 @@ process_wait (tid_t child_tid) {
 		return -1;
 	}
 	sema_down(&child->child_wait_sema);
-	int child_exist_status = child->exist_status;
+	int child_exist_status = child->exit_status;
 	list_remove(&child->child_elem);
 	sema_up(&child->exit_sema);
 	return child_exist_status;
@@ -300,13 +322,14 @@ process_exit (void) {
 	struct thread *curr = thread_current ();
 	if (curr->loading_file){
 		file_close(curr->loading_file);
+		curr->loading_file = NULL;
 	}
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	if(curr->next_fd >=2){
-		for(int i =2;i<=curr->next_fd;i++){
+		for(int i =2;i<FDT_CNT_LIMIT;i++){
 			if(curr->fdt[i] == NULL){
 				continue;
 			}
@@ -314,7 +337,7 @@ process_exit (void) {
 		}
 	}
 	
-	palloc_free_page(curr->fdt);
+	palloc_free_multiple(curr->fdt,FDT_PAGES);
 	process_cleanup ();
 	sema_down(&curr->exit_sema);
 }
@@ -361,7 +384,7 @@ int process_add_fd(struct file *f){
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->fdt;
 	
-	while(curr->next_fd < FDT_CNT_LIMIT && fdt[curr->next_fd] != NULL){
+	while(curr->next_fd<=FDT_CNT_LIMIT && fdt[curr->next_fd]){
 		curr->next_fd++;
 	}
 
@@ -453,7 +476,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
-
 	/* Open executable file. */
 	file = filesys_open (file_name);
 	if (file == NULL) {
@@ -526,6 +548,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 	file_deny_write(file); // 파일 복사 중 쓰기 방지
 	t->loading_file = file;
+
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
@@ -535,6 +558,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	
 	
 	
 

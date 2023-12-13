@@ -42,7 +42,7 @@ int make_children (void);
    The kernel must free any kernel resources associated
    with these file descriptors. */
 static void
-consume_some_resources (void)
+      consume_some_resources (void)
 {
   int fd, fdmax = 126;
 
@@ -61,8 +61,10 @@ consume_some_resources (void)
 			  break;
 	  }
 #else
-		if (open (test_name) == -1)
-		  break;
+		if (open (test_name) == -1){
+      break;
+    }
+		  
 #endif
   }
 }
@@ -104,6 +106,7 @@ consume_some_resources_and_die (void)
 int
 make_children (void) {
   int i = 0;
+  int cnt;
   int pid;
   char child_name[128];
   for (; ; random_init (i), i++) {

@@ -12,6 +12,7 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "devices/timer.h"
+#include "lib/stdio.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -222,13 +223,17 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-	
-	t->fdt = palloc_get_multiple(PAL_ZERO,FDT_PAGES);
+
+
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
 	if(t->fdt == NULL){
 		return TID_ERROR;
 	}
 	list_push_back(&thread_current()->child_list,&t->child_elem);
-	t->parent = thread_current();
+	t->next_fd = 2;
+	t->fdt[0] = STDIN_FILENO;
+	t->fdt[1] = STDOUT_FILENO;
+	
 	
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -631,10 +636,12 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
 	t->real_priority = priority;
 	list_init(&t->donation_list);
 	t-> nice = 0;
 	t->recent_cpu = 0;
+	t->exit_status = 0;
 	t->next_fd = 2;
 	list_init(&t->child_list);
 	sema_init(&t->child_wait_sema,0);
