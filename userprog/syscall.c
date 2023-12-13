@@ -31,6 +31,7 @@ int read(int fd, void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+int dup2(int oldfd, int newfd);
 
 /* System call.
  *
@@ -120,6 +121,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 
 		case SYS_CLOSE:
 			close(f->R.rdi);
+			break;
+
+		case SYS_DUP2:
+			f->R.rax = dup2(f->R.rdi,f->R.rsi);
 			break;
 	}
 }
@@ -255,7 +260,7 @@ void seek (int fd, unsigned position){
 	if(position < 0){
 		return;
 	}
-	if (fd >1 && curr->fdt[fd] != NULL){
+	if (curr->fdt[fd] != NULL){
 		file_seek(curr->fdt[fd],(off_t)position);
 	}
 }
@@ -273,12 +278,42 @@ unsigned tell (int fd){
 
 void close (int fd){
 	struct thread *curr = thread_current ();
-	if (fd < 2){
-		return;
-	}
 	struct file *closing_file = curr->fdt[fd];
 	if(closing_file != NULL){
+		if(fd >1){
+			for(int i = 2; i< curr->next_dup;i++){
+				if(curr->fdt_dup[i] == curr->fdt[fd]){
+					curr->fdt_dup[i] == NULL;
+					curr->fdt[fd] == NULL;
+					return;
+				}
+			}
+		}
 		file_close(curr->fdt[fd]);
 		curr->fdt[fd] = NULL;
 	}
+}
+
+int dup2(int oldfd, int newfd){
+	if(oldfd < 2){
+		return -1;
+	}
+
+	if(oldfd == newfd){
+		return newfd;
+	}
+
+	struct thread *curr = thread_current ();
+
+	if (curr->fdt[newfd] != NULL){
+		return -1;
+	}
+
+	lock_acquire(&filesys_lock);
+	curr->fdt[newfd] = curr->fdt[oldfd];
+	curr->fdt_dup[curr->next_dup] = curr->fdt[newfd];
+	curr->next_dup++;
+	lock_release(&filesys_lock);
+
+	return newfd;
 }

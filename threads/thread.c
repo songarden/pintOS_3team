@@ -229,10 +229,16 @@ thread_create (const char *name, int priority,
 	if(t->fdt == NULL){
 		return TID_ERROR;
 	}
+	t->fdt_dup= palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if(t->fdt_dup == NULL){
+		return TID_ERROR;
+	}
+
 	list_push_back(&thread_current()->child_list,&t->child_elem);
 	t->next_fd = 2;
 	t->fdt[0] = STDIN_FILENO;
 	t->fdt[1] = STDOUT_FILENO;
+	t->next_dup = 2;
 	
 	
 	/* Add to run queue. */

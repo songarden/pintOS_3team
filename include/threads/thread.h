@@ -31,7 +31,7 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 #define F (1<<14)                       /* 17.14 소수점 표현의 1*/
 #define FDT_PAGES 1
-#define FDT_CNT_LIMIT 128
+#define FDT_CNT_LIMIT (1<<9)
 
 
 /* A kernel thread or user process.
@@ -112,6 +112,8 @@ struct thread {
 
 	/* file descripter 멤버 */
 	struct file **fdt;
+	struct file **fdt_dup;
+	int next_dup;
 	int next_fd;
 
 	struct intr_frame parent_if;
