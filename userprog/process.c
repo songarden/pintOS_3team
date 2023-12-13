@@ -80,8 +80,13 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	struct thread *cur = thread_current();
+	tid_t ctid = thread_create (name, PRI_DEFAULT, __do_fork, cur);
+	if (ctid == TID_ERROR)
+		return TID_ERROR;
+	struct thread *child = get_child_process(ctid);
+	sema_down(&cur->sema_fork);
+	return ctid;
 }
 
 #ifndef VM
