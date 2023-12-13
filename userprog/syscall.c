@@ -75,6 +75,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_CLOSE:
 	        close(f->R.rdi);
 	        break;
+        case SYS_EXEC:
+	        exec(f->R.rdi);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -211,4 +214,20 @@ void check_address(void *addr) {
 	struct thread *cur = thread_current();
 	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
 		exit(-1);
+}
+
+int exec (const char *file_name) {
+	check_address(file_name);
+
+	int file_size = strlen(file_name) + 1;
+	char *fn_copy = palloc_get_page(PAL_ZERO);
+	if (!fn_copy) {
+		exit(-1);
+		return -1;
+	}
+	strlcpy(fn_copy, file_name, file_size);
+	if (process_exec(fn_copy) == -1) {
+		exit(-1);
+		return -1;
+	}
 }
