@@ -506,6 +506,21 @@ done:
 	return success;
 }
 
+struct thread *get_child_process(int pid) {
+  struct thread *cur = thread_current();
+  struct list *child_list = &cur->children_list;
+  struct list_elem *cur_child = list_begin(child_list);
+
+  while (cur_child != list_end(child_list)) {
+    struct thread *cur_t = list_entry(cur_child, struct thread, child_elem);
+    if (cur_t->tid == pid) {
+      return cur_t;
+    }
+    cur_child = list_next(cur_child);
+  }
+  return NULL;
+}
+
 void argument_stack(char **parse, int count, void **esp) {
   
   char *argv_address[count];
