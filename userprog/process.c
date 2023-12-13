@@ -141,7 +141,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if = &parent->ptf;
+	struct intr_frame *parent_if = &parent->fdt;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -267,7 +267,7 @@ process_exit (void) {
 
 	if (curr->running_file)
 		file_close(curr->running_file);
-		
+
 	int cnt = 2;
 	while (cnt < 128) {
 		if (table[cnt]) { // != 0 && table[cnt] != NULL
