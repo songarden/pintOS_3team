@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
+#include "lib/stdio.h"
 #include <string.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
@@ -254,6 +255,12 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	list_push_back(&thread_current()->child_list, &t->child_elem);
+
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if(t->fdt == NULL) return TID_ERROR;
+	t->fdt[0] = STDIN_FILENO;
+	t->fdt[1] = STDOUT_FILENO;
 	/* Add to run queue. */
 	thread_unblock (t);
 	if(t->priority > thread_get_priority()) thread_yield();
@@ -618,13 +625,20 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
+	t->magic = THREAD_MAGIC;
+
 	t->original_priority = priority;
 	t->waiting_lock = NULL;
-	t->magic = THREAD_MAGIC;
 	t->for_ticks=0;
 	t->nice = NICE_DEFAULT;
 	t->recent_cpu = RECENT_CPU_DEFAULT;
 	list_init(&t->holding_locks);
+	t->exit_status=0;
+	t->next_fd = 2;
+	sema_init(&t->exit_sema, 0);
+	sema_init(&t->load_sema, 0);
+	sema_init(&t->wait_sema, 0);
+	list_init(&t->child_list);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
