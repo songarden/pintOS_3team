@@ -72,6 +72,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_TELL:
 	        f->R.rax = tell(f->R.rdi);
 	        break;
+        case SYS_CLOSE:
+	        close(f->R.rdi);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -192,4 +195,14 @@ unsigned tell (int fd) {
 	struct file *curfile = thread_current()->fdt[fd];
 	if (curfile)
 		return file_tell(curfile);
+}
+
+void close (int fd) {
+	struct file * file = thread_current()->fdt[fd];
+	if (file) {
+		lock_acquire(&filesys_lock);
+		thread_current()->fdt[fd] = NULL;
+		file_close(file);
+		lock_release(&filesys_lock);
+	}
 }
