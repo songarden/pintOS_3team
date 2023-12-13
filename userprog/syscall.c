@@ -51,6 +51,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_CREATE:
 	        f->R.rax = create(f->R.rdi, f->R.rsi);
 	        break;
+        case SYS_REMOVE:
+	        f->R.rax = remove(f->R.rdi);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -82,4 +85,13 @@ bool create (const char *file, unsigned initial_size) {
 	*/
 	check_address(file);
 	return filesys_create(file, initial_size);
+}
+
+bool remove (const char *file) {
+	/* 
+	* 파일 이름에 해당하는 파일을 제거
+	* 파일 제거 성공 시 true 반환, 실패 시 false 반환
+	*/
+	check_address(file);
+	return filesys_remove(file);
 }
