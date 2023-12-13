@@ -339,6 +339,14 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
+	char *token, *save_ptr;
+	char *argv[64];
+	uint64_t cnt = 0;
+
+	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) {
+		argv[cnt++] = token;
+	}
+
 	/* Open executable file. */
 	file = filesys_open (file_name);
 	if (file == NULL) {
