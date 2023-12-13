@@ -41,6 +41,18 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
-	printf ("system call!\n");
-	thread_exit ();
+    switch (f->R.rax) {
+	    case SYS_HALT:
+	        halt();
+	        break;
+        default:
+			exit(-1);
+			break;
+    }
+}
+
+
+void halt(void) {
+	// * power_off()를 사용하여 pintos 종료
+	power_off();
 }
