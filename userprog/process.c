@@ -211,9 +211,16 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 
-	while (1){}
-	
-	return -1;
+	struct thread *child = get_child_process(child_tid);
+
+	if (child == NULL)
+		return -1;
+
+	sema_down(&child->sema_wait);
+	int exit_status = child->exit_status;
+	list_remove(&child->child_elem);
+	sema_up(&child->sema_exit);
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
