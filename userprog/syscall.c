@@ -54,6 +54,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_REMOVE:
 	        f->R.rax = remove(f->R.rdi);
 	        break;
+        case SYS_OPEN:
+	        f->R.rax = open(f->R.rdi);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -94,4 +97,21 @@ bool remove (const char *file) {
 	*/
 	check_address(file);
 	return filesys_remove(file);
+}
+
+int open (const char *file) {
+	check_address(file);
+	struct thread *cur = thread_current();
+	struct file *fd = filesys_open(file);
+	if (fd) {
+		for (int i = 2; i < 128; i++) {
+			if (!cur->fdt[i]) {
+				cur->fdt[i] = fd;
+				cur->next_fd = i + 1;
+				return i;
+			}
+		}
+		file_close(fd);
+	}
+	return -1;
 }
