@@ -4,7 +4,7 @@ Kernel command line: -q -f put create-exists run create-exists
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  156,876,800 loops/s.
+Calibrating timer...  130,867,200 loops/s.
 hd0:0: detected 321 sector (160 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1:0: detected 104 sector (52 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -21,12 +21,12 @@ Executing 'create-exists':
 (create-exists) end
 create-exists: exit(0)
 Kernel PANIC at ../../filesys/inode.c:304 in inode_allow_write(): assertion `inode->deny_write_cnt > 0' failed.
-Call stack: 0x8004218654 0x80042207da 0x800421f631 0x800421f3de 0x800421c27f 0x80042075ff 0x800421d994 0x800421d6ee 0x800421d5b8 0x400dab.
+Call stack: 0x8004218654 0x800422073a 0x800421f591 0x800421f33e 0x800421c27f 0x80042075ff 0x800421d8f4 0x800421d64e 0x800421d518 0x400dab.
 The `backtrace' program can make call stacks useful.
 Read "Backtraces" in the "Debugging Tools" chapter
 of the Pintos documentation for more information.
-Timer: 67 ticks
-Thread: 30 idle ticks, 29 kernel ticks, 8 user ticks
+Timer: 68 ticks
+Thread: 30 idle ticks, 30 kernel ticks, 8 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 163 reads, 304 writes
 hd1:0: 104 reads, 0 writes
