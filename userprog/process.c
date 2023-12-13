@@ -141,7 +141,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if = &parent->fdt;
+	struct intr_frame *parent_if = &parent->ptf;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -502,7 +502,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
 	return success;
 }
 

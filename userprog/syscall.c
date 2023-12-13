@@ -93,6 +93,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	        memcpy(&thread_current()->ptf, f, sizeof(struct intr_frame));
 	        f->R.rax = fork(f->R.rdi);
 	        break;
+		case SYS_DUP2:
+    		f->R.rax = dup2(f->R.rdi, f->R.rsi);
+    		break;
         default:
 			exit(-1);
 			break;
@@ -184,7 +187,7 @@ int read (int fd, void *buffer, unsigned size) {
 int write (int fd UNUSED, const void *buffer, unsigned size) {
 	check_address(buffer);
 
-	if (fd == 0) // STDIN일때 -1
+	if (fd < 1 ) // STDIN일때 -1
 		return -1;
 
 	if (fd == 1) {
@@ -201,6 +204,7 @@ int write (int fd UNUSED, const void *buffer, unsigned size) {
 		lock_release(&filesys_lock);
 		return write_byte;
 	}
+	else return -1;
 }
 
 void seek (int fd, unsigned position) {
@@ -254,4 +258,16 @@ void check_address(void *addr) {
 	struct thread *cur = thread_current();
 	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
 		exit(-1);
+}
+
+int dup2(int oldfd, int newfd) {
+    struct thread *cur = thread_current();
+    if (oldfd < 2 || oldfd >= 128 || cur->fdt[oldfd] == NULL)
+        return -1;
+    if (oldfd == newfd)
+        return newfd;
+    if (newfd >= 0 && newfd < 128 && cur->fdt[newfd] != NULL)
+        close(newfd);
+    cur->fdt[newfd] = file_duplicate(cur->fdt[oldfd]);
+    return newfd;
 }
