@@ -1,8 +1,10 @@
+
+/* Multi-Level Feedback Queue Scheduler 구현 시 추가한 헤더파일 */
 #define F (1 << 14) /* fixed point 1 */
 #define INT_MAX ((1 << 31) - 1)
 #define INT_MIN (-(1 << 31))
-
 #include <stdint.h> /* For int64_t */
+
 // x and y denote fixed_point numbers in 17.14 format
 // n is an integer
 
@@ -21,12 +23,14 @@ int div_mixed(int x, int n);  /* FP와 int 나눗셈(x/n) */
 /* 함수 본체 */
 
 /* integer를 fixed point로 전환 */
+
 int int_to_fp(int n)
 {
     return n * F;
 }
 
 /* FP를 int로 전환(버림) */
+
 int fp_to_int(int x)
 {
     return x / F;
