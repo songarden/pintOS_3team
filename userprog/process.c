@@ -224,7 +224,6 @@ __do_fork (void *aux) {
 	}
 	
 	current -> next_fd = parent -> next_fd;
-	
 	sema_up(&current->dupl_sema);
 	process_init();
 	/* Finally, switch to the newly created process. */
@@ -320,23 +319,39 @@ process_wait (tid_t child_tid) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
-	if (curr->loading_file){
-		file_close(curr->loading_file);
-		curr->loading_file = NULL;
-	}
+	bool is_dup = false;
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	if(curr->next_fd >=2){
-		for(int i =2;i<FDT_CNT_LIMIT;i++){
-			if(curr->fdt[i] == NULL){
+	for(int i =2;i<FDT_CNT_LIMIT;i++){
+		if(curr->fdt[i] == NULL){
+			continue;
+		}
+		else{
+			for(int j=2;j<curr->next_dup;j++){
+				if(curr->fdt_dup[j] == curr->fdt[i]){
+					curr->fdt_dup[j] = NULL;
+					curr->fdt[i] = NULL;
+					is_dup = true;
+					break;
+				}
+			}
+			if(is_dup){
+				is_dup = false;
 				continue;
 			}
-			file_close(curr->fdt[i]);
+			else{
+				file_close(curr->fdt[i]);
+				curr->fdt[i] = NULL;
+			}
 		}
 	}
-	
+	if (curr->loading_file){
+		file_close(curr->loading_file);
+		curr->loading_file = NULL;
+	}
+	palloc_free_multiple(curr->fdt_dup,FDT_PAGES);
 	palloc_free_multiple(curr->fdt,FDT_PAGES);
 	process_cleanup ();
 	sema_down(&curr->exit_sema);
