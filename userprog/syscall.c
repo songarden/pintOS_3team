@@ -206,3 +206,9 @@ void close (int fd) {
 		lock_release(&filesys_lock);
 	}
 }
+
+void check_address(void *addr) {
+	struct thread *cur = thread_current();
+	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
+		exit(-1);
+}
