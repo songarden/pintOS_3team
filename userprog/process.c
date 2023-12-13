@@ -131,11 +131,13 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent->ptf;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	if_.R.rax = 0;
+
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -158,13 +160,28 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
-	process_init ();
+	int cnt = 2;
+	struct file **table = parent->fdt;
+	while (cnt < 128) {
+		if (table[cnt]) {
+			current->fdt[cnt] = file_duplicate(table[cnt]);
+		} else {
+			current->fdt[cnt] = NULL;
+		}
+		cnt++;
+	}
+	current->next_fd = parent->next_fd;
 
+ 	sema_up(&parent->sema_fork);
+
+  	process_init ();
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret (&if_);
+
 error:
-	thread_exit ();
+	sema_up(&parent->sema_fork);
+	exit(TID_ERROR);
 }
 
 /* Switch the current execution context to the f_name.
