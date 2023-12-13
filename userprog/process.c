@@ -384,13 +384,14 @@ int process_add_fd(struct file *f){
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->fdt;
 	
-	while(curr->next_fd<=FDT_CNT_LIMIT && fdt[curr->next_fd]){
+	while(curr->next_fd<FDT_CNT_LIMIT && fdt[curr->next_fd]){
 		curr->next_fd++;
 	}
 
 	if(curr->next_fd == FDT_CNT_LIMIT){
 		return -1;
 	}
+	
 	fdt[curr->next_fd] = f;
 
 	return curr->next_fd;
@@ -477,6 +478,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 	/* Open executable file. */
+	lock_acquire(&filesys_lock);
 	file = filesys_open (file_name);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
@@ -565,13 +567,14 @@ load (const char *file_name, struct intr_frame *if_) {
 	success = true;
 
 done:
+	lock_release(&filesys_lock);
 	/* We arrive here whether the load is successful or not. */
 	return success;
 }
 
 static void parsing_file_input(char *file_name, struct intr_frame *if_){
 	char *f_name;
-	f_name = palloc_get_page(0);
+	f_name = palloc_get_page(PAL_USER|PAL_ZERO);
 	if (f_name == NULL)
 		return TID_ERROR;
 	strlcpy (f_name, file_name, PGSIZE);
