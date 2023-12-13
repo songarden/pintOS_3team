@@ -81,6 +81,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
         case SYS_WAIT:
 	        f->R.rax = wait(f->R.rdi);
 	        break; 
+        case SYS_FORK:
+	        memcpy(&thread_current()->ptf, f, sizeof(struct intr_frame));
+	        f->R.rax = fork(f->R.rdi);
+	        break;
         default:
 			exit(-1);
 			break;
@@ -237,4 +241,9 @@ int exec (const char *file_name) {
 
 int wait (tid_t pid) {
   	return process_wait(pid);
+}
+
+int fork (const char *thread_name) {
+	check_address(thread_name);
+	return process_fork(thread_name, &thread_current()->ptf);
 }
