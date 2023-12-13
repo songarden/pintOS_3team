@@ -45,14 +45,29 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	    case SYS_HALT:
 	        halt();
 	        break;
+        case SYS_EXIT:
+	        exit(f->R.rdi);
+	        break;
         default:
 			exit(-1);
 			break;
     }
 }
 
-
 void halt(void) {
 	// * power_off()를 사용하여 pintos 종료
 	power_off();
+}
+
+void exit(int status) {
+	/*
+	* 실행중인 스레드 구조체를 가져옴
+	* 프로세스 종료 메시지 출력
+	* 출력 양식: "프로세스 이름: exit(종료상태)"
+	* thread 종료
+	*/ 
+	struct thread *cur = thread_current();
+	cur->exit_status = status;
+	printf("%s: exit(%d)\n", cur->name, status);
+	thread_exit();
 }
