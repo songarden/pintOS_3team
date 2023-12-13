@@ -444,6 +444,41 @@ done:
 	return success;
 }
 
+void argument_stack(char **parse, int count, void **esp) {
+  
+  char *argv_address[count];
+  uint8_t size = 0;
+
+	// * argv[i] 문자열
+	for (int i = count - 1; -1 < i; i--) {
+		*esp -= (strlen(parse[i]) + 1);
+		memcpy(*esp, parse[i], strlen(parse[i]) + 1);
+		size += strlen(parse[i]) + 1;
+		argv_address[i] = *esp;
+	}
+
+	if (size % 8) {
+		for (int i = (8 - (size % 8)); 0 < i; i--) {
+			*esp -= 1;
+		**(char **)esp = 0;
+	}
+  }
+
+  *esp -= 8;
+  **(char **)esp = 0;
+
+  // * argv[i] 주소
+	for (int i = count - 1; -1 < i; i--) {
+		*esp = *esp - 8;
+		memcpy(*esp, &argv_address[i], strlen(&argv_address[i]));
+	}
+
+	// * return address(fake)
+	*esp = *esp - 8;
+	**(char **)esp = 0;
+
+}
+
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
