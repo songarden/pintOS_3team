@@ -199,36 +199,27 @@ __do_fork (void *aux) {
 	}
 		
 #endif
-
-	/* TODO: Your code goes here.
-	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
-	 * TODO:       in include/filesys/file.h. Note that parent should not return
-	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
-
 	
 	for (int i = 0; i < FDT_CNT_LIMIT; i++) {
-
 		if (i<2){
 			current->fdt[i] = i;
 			continue;
 		}
-		
 		struct file *file = parent->fdt[i];
-
 		if (file == NULL) {
 			continue;
 		}
 		file = file_duplicate(file);
 		current->fdt[i] = file;
 	}
-	
 	current -> next_fd = parent -> next_fd;
 	sema_up(&current->dupl_sema);
 	process_init();
+
 	/* Finally, switch to the newly created process. */
 	if (succ)
-		do_iret (&if_); //여기서 fork 과정은 끝이나고 fork하는 thread는 exit 대신 context switching 된다.
+		do_iret (&if_); //여기서 fork 과정은 끝이나고 
+		//fork하는 thread는 exit 대신 context switching 된다.
 error:
 	succ =false;
 	sema_up(&current->dupl_sema);
@@ -263,6 +254,7 @@ process_exec (void *f_name) {
 	if (f_copy == NULL)
 		return TID_ERROR;
 	strlcpy (f_copy, file_name, PGSIZE);
+	
 	f_copy = strtok_r(f_copy," ",&save_ptr);
 	/* And then load the binary */
 	success = load (f_copy, &_if);
@@ -277,7 +269,6 @@ process_exec (void *f_name) {
 	parsing_file_input(file_name,&_if); //file이 있는 경우에만 parsing하도록
 	// hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
 	palloc_free_page (file_name);
-
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -295,9 +286,6 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid) {
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
 	if (child_tid == TID_ERROR){
 		return -1;
 	}
@@ -320,10 +308,6 @@ void
 process_exit (void) {
 	struct thread *curr = thread_current ();
 	bool is_dup = false;
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
 	for(int i =2;i<FDT_CNT_LIMIT;i++){
 		if(curr->fdt[i] == NULL){
 			continue;
@@ -351,10 +335,21 @@ process_exit (void) {
 		file_close(curr->loading_file);
 		curr->loading_file = NULL;
 	}
+
 	palloc_free_multiple(curr->fdt_dup,FDT_PAGES);
 	palloc_free_multiple(curr->fdt,FDT_PAGES);
+
+	// //죽을때 wait 부르지 않은 자식들 exit 허용하고 exit
+	// //error : list_remove를 사용 시 페이지 폴트 : 권한없는 메모리 접근
+	// if(!list_empty(&curr->child_list)){
+	// 	struct list_elem *elem;
+	// 	for(elem=list_begin(&curr->child_list);elem!=list_end(&curr->child_list);elem=list_next(elem)){
+	// 		struct thread *waiting_child = list_entry(elem,struct thread,child_elem);
+	// 		sema_up(&waiting_child->exit_sema);
+	// 	}
+	// }
+
 	process_cleanup ();
-	sema_down(&curr->exit_sema);
 }
 
 /* Free the current process's resources. */

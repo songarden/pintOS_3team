@@ -345,7 +345,10 @@ thread_exit (void) {
 #ifdef USERPROG
 	process_exit ();
 #endif
+	if (curr != idle_thread)
+		sema_down(&curr->exit_sema);
 
+	
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
