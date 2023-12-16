@@ -2,18 +2,33 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build_pintos",
+            "label": "Build PintOS",
             "type": "shell",
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}"
             },
             "command": [
-                "make -j$(nproc)"
+                "make"
             ],
-            "problemMatcher": []
+            "args": [
+                "-j$(nproc)"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
         },
         {
-            "label": "dbg_userprog",
+            "label": "Debug PintOS User Program",
+            "dependsOn": [
+                "Configure QEMU Setting",
+                "Run QEMU"
+            ],
+            "dependsOrder": "sequence"
+        },
+        {
+            "label": "Run QEMU with User Program",
             "type": "shell",
             "command": [
                 "${workspaceFolder}/utils/pintos"
@@ -22,23 +37,21 @@
                 "--gdb",
                 "--fs-disk=10",
                 "-p",
-                "tests/userprog/${input:filename}:${input:filename}",
+                "tests/userprog/halt:halt",
                 "--",
                 "-q",
                 "-f",
                 "run",
-                "${input:filename} ${input:args}"
+                "halt ${input:args}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"
             },
             "dependsOn": [
-                "build_pintos"
+                "Configure QEMU Setting"
             ],
+            "dependsOrder": "sequence",
             "isBackground": true,
-            // problem matcher hack
-            // If vscode starts supporting features in the future 
-            // that prevent it from waiting for preLaunchTask to complete, delete this code.
             "problemMatcher": [
                 {
                     "pattern": [
@@ -52,34 +65,37 @@
                     "background": {
                         "activeOnStart": true,
                         "beginsPattern": ".",
-                        "endsPattern": ".",
+                        "endsPattern": "."
                     }
                 }
             ]
         },
         {
-            "label": "dbg_pintos",
+            "label": "Run QEMU",
             "type": "shell",
             "command": [
                 "${workspaceFolder}/utils/pintos"
             ],
             "args": [
                 "--gdb",
+                "-m 20",
+                "--fs-disk=10",
+                "--swap-disk=4",
+                "-p",
+                "tests/userprog/no-vm/multi-oom:multi-oom",
                 "--",
                 "-q",
+                "-f",
                 "run",
-                "${input:test}"
+                "multi-oom ${input:args}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"
             },
             "dependsOn": [
-                "build_pintos"
+                "Build PintOS"
             ],
             "isBackground": true,
-            // problem matcher hack
-            // If vscode starts supporting features in the future 
-            // that prevent it from waiting for preLaunchTask to complete, delete this code.
             "problemMatcher": [
                 {
                     "pattern": [
@@ -93,10 +109,39 @@
                     "background": {
                         "activeOnStart": true,
                         "beginsPattern": ".",
-                        "endsPattern": ".",
+                        "endsPattern": "."
                     }
                 }
             ]
+        },
+        {
+            "label": "Configure QEMU Setting",
+            "command": "${workspaceFolder}/utils/vscode-argument-builder",
+            "args": [
+                "${input:filename}",
+                "${input:project}",
+                "${workspaceRoot}",
+                "Run QEMU"
+            ],
+            "dependsOn": [
+                "Update Exec File List"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Update Exec File List",
+            "command": "${workspaceFolder}/utils/vscode-filename-configurator",
+            "args": [
+                "exec",
+                "${input:project}",
+                "${workspaceFolder}",
+                "filename"
+            ],
+            "dependsOn": [
+                "Build PintOS"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
         }
     ],
     "inputs": [
@@ -110,16 +155,103 @@
             "description": "Enter the project to start.",
             "type": "pickString",
             "options": [
-                "threads",
                 "userprog",
-                "filesys",
                 "vm"
             ]
         },
         {
             "id": "filename",
-            "description": "Enter the user program to start.",
-            "type": "promptString"
+            "description": "Pick the user program to start.",
+            "type": "pickString",
+            "options": [
+                "tests/filesys/base/sm-seq-random",
+                "tests/filesys/base/sm-full",
+                "tests/filesys/base/lg-seq-random",
+                "tests/filesys/base/sm-create",
+                "tests/filesys/base/lg-seq-block",
+                "tests/filesys/base/syn-read",
+                "tests/filesys/base/syn-remove",
+                "tests/filesys/base/child-syn-wrt",
+                "tests/filesys/base/child-syn-read",
+                "tests/filesys/base/lg-random",
+                "tests/filesys/base/syn-write",
+                "tests/filesys/base/lg-full",
+                "tests/filesys/base/sm-random",
+                "tests/filesys/base/sm-seq-block",
+                "tests/filesys/base/lg-create",
+                "tests/userprog/close-twice",
+                "tests/userprog/wait-twice",
+                "tests/userprog/bad-jump",
+                "tests/userprog/open-null",
+                "tests/userprog/wait-simple",
+                "tests/userprog/open-missing",
+                "tests/userprog/create-exists",
+                "tests/userprog/create-bound",
+                "tests/userprog/child-close",
+                "tests/userprog/rox-simple",
+                "tests/userprog/bad-write2",
+                "tests/userprog/multi-recurse",
+                "tests/userprog/fork-boundary",
+                "tests/userprog/read-bad-fd",
+                "tests/userprog/bad-read2",
+                "tests/userprog/exec-arg",
+                "tests/userprog/bad-write",
+                "tests/userprog/open-twice",
+                "tests/userprog/exec-boundary",
+                "tests/userprog/create-empty",
+                "tests/userprog/exec-once",
+                "tests/userprog/child-simple",
+                "tests/userprog/read-normal",
+                "tests/userprog/exec-bad-ptr",
+                "tests/userprog/multi-child-fd",
+                "tests/userprog/close-normal",
+                "tests/userprog/read-boundary",
+                "tests/userprog/child-rox",
+                "tests/userprog/wait-bad-pid",
+                "tests/userprog/write-bad-ptr",
+                "tests/userprog/read-zero",
+                "tests/userprog/open-boundary",
+                "tests/userprog/create-normal",
+                "tests/userprog/bad-jump2",
+                "tests/userprog/fork-recursive",
+                "tests/userprog/close-bad-fd",
+                "tests/userprog/exec-read",
+                "tests/userprog/args-single",
+                "tests/userprog/rox-multichild",
+                "tests/userprog/fork-read",
+                "tests/userprog/read-stdout",
+                "tests/userprog/read-bad-ptr",
+                "tests/userprog/halt",
+                "tests/userprog/write-boundary",
+                "tests/userprog/write-bad-fd",
+                "tests/userprog/child-bad",
+                "tests/userprog/fork-close",
+                "tests/userprog/args-multiple",
+                "tests/userprog/open-empty",
+                "tests/userprog/create-bad-ptr",
+                "tests/userprog/write-stdin",
+                "tests/userprog/write-zero",
+                "tests/userprog/bad-read",
+                "tests/userprog/create-long",
+                "tests/userprog/create-null",
+                "tests/userprog/fork-multiple",
+                "tests/userprog/args-many",
+                "tests/userprog/write-normal",
+                "tests/userprog/args-none",
+                "tests/userprog/child-args",
+                "tests/userprog/exit",
+                "tests/userprog/exec-missing",
+                "tests/userprog/args-dbl-space",
+                "tests/userprog/rox-child",
+                "tests/userprog/child-read",
+                "tests/userprog/open-normal",
+                "tests/userprog/open-bad-ptr",
+                "tests/userprog/wait-killed",
+                "tests/userprog/fork-once",
+                "tests/userprog/no-vm/multi-oom",
+                "tests/userprog/dup2/dup2-simple",
+                "tests/userprog/dup2/dup2-complex"
+            ]
         },
         {
             "id": "args",
