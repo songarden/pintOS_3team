@@ -224,7 +224,6 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-
 	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
 	if(t->fdt == NULL){
 		return TID_ERROR;
@@ -235,6 +234,7 @@ thread_create (const char *name, int priority,
 	}
 
 	list_push_back(&thread_current()->child_list,&t->child_elem);
+	sema_init(&t->exit_sema,0);
 	t->next_fd = 2;
 	t->fdt[0] = STDIN_FILENO;
 	t->fdt[1] = STDOUT_FILENO;
@@ -345,10 +345,8 @@ thread_exit (void) {
 #ifdef USERPROG
 	process_exit ();
 #endif
-	if (curr != idle_thread)
-		sema_down(&curr->exit_sema);
 
-	
+	printf("thread exit : %s\n",curr->name);	
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
@@ -654,7 +652,6 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->next_fd = 2;
 	list_init(&t->child_list);
 	sema_init(&t->child_wait_sema,0);
-	sema_init(&t->exit_sema,0);
 	sema_init(&t->dupl_sema,0);
 }
 

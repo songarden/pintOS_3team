@@ -133,7 +133,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-	if(is_kernel_vaddr(va)){
+	if(is_kern_pte(pte)){
 		return true;
 	}
 	/* 2. Resolve VA from the parent's page map level 4. */
@@ -335,21 +335,29 @@ process_exit (void) {
 		file_close(curr->loading_file);
 		curr->loading_file = NULL;
 	}
-
 	palloc_free_multiple(curr->fdt_dup,FDT_PAGES);
 	palloc_free_multiple(curr->fdt,FDT_PAGES);
+	
+
+	
+	
 
 	// //죽을때 wait 부르지 않은 자식들 exit 허용하고 exit
 	// //error : list_remove를 사용 시 페이지 폴트 : 권한없는 메모리 접근
 	// if(!list_empty(&curr->child_list)){
 	// 	struct list_elem *elem;
-	// 	for(elem=list_begin(&curr->child_list);elem!=list_end(&curr->child_list);elem=list_next(elem)){
+	// 	for(elem=list_begin(&curr->child_list);elem!=list_end(&curr->child_list);){
 	// 		struct thread *waiting_child = list_entry(elem,struct thread,child_elem);
+	// 		printf("%s\n",waiting_child->name);
+	// 		elem = list_remove(elem);
 	// 		sema_up(&waiting_child->exit_sema);
 	// 	}
 	// }
 
 	process_cleanup ();
+	sema_down(&curr->exit_sema);
+	
+	
 }
 
 /* Free the current process's resources. */
