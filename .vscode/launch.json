@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(gdb) Attach",
+            "name": "Debug Kernel with User Program",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceRoot}/${input:project}/build/kernel.o",
+            "program": "${workspaceRoot}/${input:userprog_project}/build/kernel.o",
             "MIMode": "gdb",
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
@@ -24,18 +24,16 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "dbg_pintos"
+            "preLaunchTask": "Debug PintOS User Program"
         }
     ],
     "inputs": [
         {
-            "id": "project",
+            "id": "userprog_project",
             "description": "Enter the project to start.",
             "type": "pickString",
             "options": [
-                "threads",
                 "userprog",
-                "filesys",
                 "vm"
             ]
         }

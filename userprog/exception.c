@@ -123,6 +123,7 @@ page_fault (struct intr_frame *f) {
 	bool user;         /* True: access by user, false: access by kernel. */
 	void *fault_addr;  /* Fault address. */
 
+
 	/* Obtain faulting address, the virtual address that was
 	   accessed to cause the fault.  It may point to code or to
 	   data.  It is not necessarily the address of the instruction
@@ -140,6 +141,8 @@ page_fault (struct intr_frame *f) {
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
 
+	exit(-1);
+
 #ifdef VM
 	/* For project 3 and later. */
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
@@ -156,5 +159,6 @@ page_fault (struct intr_frame *f) {
 			write ? "writing" : "reading",
 			user ? "user" : "kernel");
 	kill (f);
+	
 }
 

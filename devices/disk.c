@@ -445,7 +445,7 @@ static void
 output_sector (struct channel *c, const void *sector) {
 	outsw (reg_data (c), sector, DISK_SECTOR_SIZE / 2);
 }
-
+
 /* Low-level ATA primitives. */
 
 /* Wait up to 10 seconds for the controller to become idle, that
@@ -510,7 +510,7 @@ select_device_wait (const struct disk *d) {
 	select_device (d);
 	wait_until_idle (d);
 }
-
+
 /* ATA interrupt handler. */
 static void
 interrupt_handler (struct intr_frame *f) {

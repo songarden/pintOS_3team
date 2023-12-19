@@ -1,4 +1,4 @@
-#include <syscall.h>
+#include <lib/user/syscall.h>
 #include <stdint.h>
 #include "../syscall-nr.h"
 

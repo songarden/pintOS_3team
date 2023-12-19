@@ -12,6 +12,7 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "devices/timer.h"
+#include "lib/stdio.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -223,6 +224,22 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if(t->fdt == NULL){
+		return TID_ERROR;
+	}
+	t->fdt_dup= palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if(t->fdt_dup == NULL){
+		return TID_ERROR;
+	}
+
+	list_push_back(&thread_current()->child_list,&t->child_elem);
+	sema_init(&t->exit_sema,0);
+	t->next_fd = 2;
+	t->fdt[0] = STDIN_FILENO;
+	t->fdt[1] = STDOUT_FILENO;
+	t->next_dup = 2;
+	
 	
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -321,11 +338,15 @@ thread_tid (void) {
 void
 thread_exit (void) {
 	ASSERT (!intr_context ());
+	struct thread *curr = thread_current ();
+	
+	
 
 #ifdef USERPROG
 	process_exit ();
 #endif
 
+	printf("thread exit : %s\n",curr->name);	
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
@@ -622,10 +643,16 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
 	t->real_priority = priority;
 	list_init(&t->donation_list);
 	t-> nice = 0;
 	t->recent_cpu = 0;
+	t->exit_status = 0;
+	t->next_fd = 2;
+	list_init(&t->child_list);
+	sema_init(&t->child_wait_sema,0);
+	sema_init(&t->dupl_sema,0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
