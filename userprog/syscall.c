@@ -16,7 +16,7 @@
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-void check_addr(void *addr);
+
 int open(const char *file_name);
 int exec(const char *cmd_line);
 void exit(int status);

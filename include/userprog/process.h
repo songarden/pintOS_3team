@@ -12,5 +12,4 @@ void process_activate (struct thread *next);
 int process_add_fd(struct file *f);
 
 
-
 #endif /* userprog/process.h */
