@@ -11,5 +11,12 @@ void process_exit (void);
 void process_activate (struct thread *next);
 int process_add_fd(struct file *f);
 
+struct load_info {
+    struct file *file;
+    size_t page_read_bytes;
+    size_t page_zero_bytes;
+    int32_t ofs;
+};
+
 
 #endif /* userprog/process.h */

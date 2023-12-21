@@ -8,6 +8,7 @@
         "syscall.h": "c",
         "vm.h": "c",
         "uninit.h": "c",
-        "process.h": "c"
+        "process.h": "c",
+        "exception.h": "c"
     }
 }
