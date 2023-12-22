@@ -10,6 +10,7 @@
 
 #include "vm/vm.h"
 #include "vm/uninit.h"
+#include "include/userprog/process.h"
 
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
@@ -42,6 +43,18 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 	};
 }
 
+bool uninit_duplicate_aux(struct page *parent_p , struct page *child_p){
+	struct uninit_page *parent_uninit = &parent_p->uninit;
+	struct uninit_page *child_uninit = &child_p->uninit;
+	child_uninit->aux = NULL;
+	child_uninit->aux = (struct load_info *)malloc(sizeof(struct load_info));
+	if (child_uninit->aux == NULL){
+		return false;
+	}
+	memcpy(child_uninit->aux,parent_uninit->aux,sizeof(struct load_info));
+	return true;
+}
+
 /* Initalize the page on first fault */
 static bool
 uninit_initialize (struct page *page, void *kva) {
@@ -65,4 +78,5 @@ uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
+	free(uninit->aux);
 }

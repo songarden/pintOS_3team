@@ -26,8 +26,10 @@ def extract_putfiles_paths(makefile_content):
         if match:
             target = match.group(1)
             file_paths = match.group(2).split()
-            
             full_paths = [path for path in file_paths]
+            for i in range(len(full_paths)):
+                if ("sample.txt" in full_paths[i]):
+                    full_paths[i] = "../../" + full_paths[i]
             putfiles_paths.append((target, full_paths))
 
     return putfiles_paths

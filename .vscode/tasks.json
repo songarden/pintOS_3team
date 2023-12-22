@@ -82,12 +82,14 @@
                 "--fs-disk=10",
                 "--swap-disk=4",
                 "-p",
-                "tests/userprog/fork-once:fork-once",
+                "tests/userprog/fork-read:fork-read",
+                "-p",
+                "../../tests/userprog/sample.txt:sample.txt",
                 "--",
                 "-q",
                 "-f",
                 "run",
-                "fork-once ${input:args}"
+                "fork-read ${input:args}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

@@ -66,11 +66,11 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		
 		if(VM_TYPE(type) == VM_ANON){
 			page_initializer = anon_initializer;
-			uninit_new(new_page,upage,init,VM_ANON,aux,page_initializer);
+			uninit_new(new_page,upage,init,type,aux,page_initializer);
 		}
 		else if(VM_TYPE(type) == VM_FILE){
 			page_initializer = file_backed_initializer;
-			uninit_new(new_page,upage,init,VM_FILE,aux,page_initializer);
+			uninit_new(new_page,upage,init,type,aux,page_initializer);
 		}
 		else{
 			printf("page 유형이 올바르지 않습니다.");
@@ -261,12 +261,14 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		memcpy(new_page,cp_page,sizeof(struct page));
 		new_page->frame = NULL;
 		spt_insert_page(dst,new_page);
-		switch(cp_type){
+		switch(VM_TYPE(cp_type)){
 			case VM_UNINIT:
+				success = uninit_duplicate_aux(cp_page,new_page);
 				break;
 			case VM_ANON:
 				success = vm_do_claim_page(new_page);
 				memcpy(new_page->frame->kva,cp_page->frame->kva,PGSIZE);
+
 				break;
 		}
 	}

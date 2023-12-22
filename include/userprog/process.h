@@ -15,7 +15,7 @@ struct load_info {
     struct file *file;
     size_t page_read_bytes;
     size_t page_zero_bytes;
-    int32_t ofs;
+    off_t ofs;
 };
 
 
