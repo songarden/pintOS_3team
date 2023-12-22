@@ -67,6 +67,7 @@ hash_clear (struct hash *h, hash_action_func *destructor) {
 	h->elem_cnt = 0;
 }
 
+
 /* Destroys hash table H.
 
    If DESTRUCTOR is non-null, then it is first called for each

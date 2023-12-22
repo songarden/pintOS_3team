@@ -180,17 +180,17 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Your code goes here */
 	if(user){
 		if(!is_user_vaddr(addr) || addr == NULL){
-			exit(-1);
+			return false;
 		}
 	}
-	if(not_present){
-		page = spt_find_page(spt,addr);
-		if(page == NULL){
-			exit(-2);
-		}
-		return vm_do_claim_page (page);
+	if(!not_present){
+		return false;
 	}
-	return false;
+	page = spt_find_page(spt,addr);
+	if(page == NULL){
+		return false;
+	}
+	return vm_do_claim_page (page);
 }
 
 /* Free the page.
@@ -235,16 +235,42 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	struct thread *curr = thread_current();
 	if (!hash_init(&spt->pages,page_hash,page_less,NULL)){
 		printf("빡종");
 		exit(-1);
 	}
+	sema_init(&curr->spt.hash_sema,1);
 }
 
 /* Copy supplemental page table from src to dst */
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+	bool success = true;
+	struct hash_iterator i;
+	
+   	hash_first (&i, &src->pages);
+   	while (hash_next (&i)){
+		struct page *cp_page = hash_entry (hash_cur (&i), struct page, spt_elem);
+		enum vm_type cp_type = cp_page->operations->type;
+		struct page *new_page = (struct page *)malloc(sizeof(struct page));
+		if(new_page == NULL){
+			exit(-13);
+		}
+		memcpy(new_page,cp_page,sizeof(struct page));
+		new_page->frame = NULL;
+		spt_insert_page(dst,new_page);
+		switch(cp_type){
+			case VM_UNINIT:
+				break;
+			case VM_ANON:
+				success = vm_do_claim_page(new_page);
+				memcpy(new_page->frame->kva,cp_page->frame->kva,PGSIZE);
+				break;
+		}
+	}
+	return success;
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -252,6 +278,14 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	sema_down(&spt->hash_sema);
+	hash_clear(&spt->pages,hash_action_free);
+	sema_up(&spt->hash_sema);
+}
+
+void hash_action_free (struct hash_elem *e,void *aux){
+	struct page *page = hash_entry(e,struct page,spt_elem);
+	vm_dealloc_page(page);
 }
 
 

@@ -82,12 +82,12 @@
                 "--fs-disk=10",
                 "--swap-disk=4",
                 "-p",
-                "tests/userprog/args-none:args-none",
+                "tests/userprog/fork-once:fork-once",
                 "--",
                 "-q",
                 "-f",
                 "run",
-                "args-none ${input:args}"
+                "fork-once ${input:args}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

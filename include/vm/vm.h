@@ -28,6 +28,7 @@ enum vm_type {
 #include "vm/anon.h"
 #include "vm/file.h"
 #include "lib/kernel/hash.h"
+#include "threads/synch.h"
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
 #endif
@@ -88,16 +89,19 @@ struct page_operations {
  * All designs up to you for this. */
 struct supplemental_page_table {
 	struct hash pages;
+	struct semaphore hash_sema;
 };
 
 #include "threads/thread.h"
 #include "userprog/syscall.h"
 #include "include/threads/mmu.h"
+#include "string.h"
 
 void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src);
 void supplemental_page_table_kill (struct supplemental_page_table *spt);
+void hash_action_free (struct hash_elem *e,void *aux);
 struct page *spt_find_page (struct supplemental_page_table *spt,
 		void *va);
 bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);

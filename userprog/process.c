@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "userprog/syscall.h"
+#include "lib/kernel/hash.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -191,8 +192,9 @@ __do_fork (void *aux) {
 	process_activate (current);
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
-	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
+	if (!supplemental_page_table_copy (&current->spt, &parent->spt)){
 		goto error;
+	}	
 #else
 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)){
 		goto error;
@@ -353,10 +355,11 @@ process_exit (void) {
 	// 		sema_up(&waiting_child->exit_sema);
 	// 	}
 	// }
-
-	process_cleanup ();
 	sema_down(&curr->exit_sema);
-	
+	process_cleanup ();
+#ifdef VM
+	hash_destroy(&curr->spt.pages,hash_action_free);
+#endif
 	
 }
 
