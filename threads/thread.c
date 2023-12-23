@@ -228,18 +228,20 @@ thread_create (const char *name, int priority,
 	if(t->fdt == NULL){
 		return TID_ERROR;
 	}
+#ifndef VM
 	t->fdt_dup= palloc_get_multiple(PAL_ZERO, FDT_PAGES);
 	if(t->fdt_dup == NULL){
 		return TID_ERROR;
 	}
-
+#endif
 	list_push_back(&thread_current()->child_list,&t->child_elem);
 	sema_init(&t->exit_sema,0);
 	t->next_fd = 2;
 	t->fdt[0] = STDIN_FILENO;
 	t->fdt[1] = STDOUT_FILENO;
+#ifndef VM
 	t->next_dup = 2;
-	
+#endif
 	
 	/* Add to run queue. */
 	thread_unblock (t);

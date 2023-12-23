@@ -7,3 +7,4 @@ void check_addr(void *addr);
 struct lock filesys_lock; //파일 접근 동기화 lock
 
 #endif /* userprog/syscall.h */
+

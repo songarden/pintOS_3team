@@ -266,10 +266,12 @@ process_exec (void *f_name) {
 	if (!success){
 		palloc_free_page (file_name);
 		return -1;
-	}
-
+	}	
 	parsing_file_input(file_name,&_if); //file이 있는 경우에만 parsing하도록
 	// hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
+#ifdef VM
+	thread_current()->curr_rsp = (void*)_if.rsp;
+#endif
 	palloc_free_page (file_name);
 	/* Start switched process. */
 	do_iret (&_if);
@@ -309,6 +311,7 @@ process_wait (tid_t child_tid) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+#ifndef VM
 	bool is_dup = false;
 	for(int i =2;i<FDT_CNT_LIMIT;i++){
 		if(curr->fdt[i] == NULL){
@@ -333,11 +336,22 @@ process_exit (void) {
 			}
 		}
 	}
+	
+	palloc_free_multiple(curr->fdt_dup,FDT_PAGES);
+#endif
+	if(curr->next_fd >=2){
+		for(int i =2;i<FDT_CNT_LIMIT;i++){
+			if(curr->fdt[i] == NULL){
+				continue;
+			}
+			file_close(curr->fdt[i]);
+		}
+	}
+	
 	if (curr->loading_file){
 		file_close(curr->loading_file);
 		curr->loading_file = NULL;
 	}
-	palloc_free_multiple(curr->fdt_dup,FDT_PAGES);
 	palloc_free_multiple(curr->fdt,FDT_PAGES);
 	
 
@@ -578,7 +592,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
-
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 	
@@ -629,7 +642,7 @@ static void parsing_file_input(char *file_name, struct intr_frame *if_){
 
 	if_->R.rsi = if_->rsp;
 	if_->R.rdi = var_cnt;
-
+	
 	if_->rsp -= sizeof(void *);
 	palloc_free_page(f_name);
 }
@@ -864,11 +877,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
+	struct thread *curr = thread_current();
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 	if (vm_alloc_page (VM_ANON|VM_MARKER_0,stack_bottom,true)){
 		success = vm_claim_page(stack_bottom);
 		if(success){
 			if_->rsp = USER_STACK;
+			curr->stack_bottom = stack_bottom;
 		}
 	}
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.

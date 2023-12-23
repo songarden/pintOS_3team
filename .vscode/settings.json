@@ -11,6 +11,13 @@
         "process.h": "c",
         "exception.h": "c",
         "string.h": "c",
-        "debug.h": "c"
+        "debug.h": "c",
+        "malloc.h": "c",
+        "inspect.h": "c",
+        "palloc.h": "c",
+        "main.h": "c",
+        "stdio.h": "c",
+        "syscall-nr.h": "c",
+        "synch.h": "c"
     }
 }

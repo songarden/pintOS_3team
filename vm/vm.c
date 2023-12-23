@@ -163,6 +163,15 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	struct thread *curr = thread_current();
+	void *new_stack_bottom = (void *) (((uint8_t *) curr->stack_bottom) - PGSIZE);
+	if (vm_alloc_page (VM_ANON|VM_MARKER_0,new_stack_bottom,true)){
+		bool success = vm_claim_page(new_stack_bottom);
+		if(success){
+			curr->stack_bottom = (void *)new_stack_bottom;
+		}
+	}
+	
 }
 
 /* Handle the fault on write_protected page */
@@ -174,18 +183,30 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt = &thread_current ()->spt;
+	struct thread *curr = thread_current();
+	struct supplemental_page_table *spt = &curr->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	if(!not_present){
+		return false;
+	}
 	if(user){
 		if(!is_user_vaddr(addr) || addr == NULL){
 			return false;
 		}
 	}
-	if(!not_present){
-		return false;
+	if((user && addr >= f->rsp-8 )||(!user && addr >= curr->curr_rsp-8 )){
+		if(addr >= USER_STACK - stack_growth_limit + PGSIZE && addr <= USER_STACK){
+			vm_stack_growth(addr);
+			return true;
+		}
+		else{
+			return false;
+		}
 	}
+	
+	
 	page = spt_find_page(spt,addr);
 	if(page == NULL){
 		return false;

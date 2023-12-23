@@ -12,11 +12,14 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "lib/kernel/stdio.h"
+#ifdef VM
+#include "vm/vm.h"
+void check_invalid_write(void *addr);
+#endif
 
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-
 int open(const char *file_name);
 int exec(const char *cmd_line);
 void exit(int status);
@@ -31,7 +34,9 @@ int read(int fd, void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+#ifndef VM
 int dup2(int oldfd, int newfd);
+#endif
 
 /* System call.
  *
@@ -66,6 +71,9 @@ void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
 	int syscall_num = f->R.rax; // rax에 존재하는 시스템콜 넘버 추출
+#ifdef VM
+	thread_current()->curr_rsp = f->rsp;
+#endif
 	switch (syscall_num){
 		case SYS_OPEN:
 			f->R.rax = open(f->R.rdi);
@@ -122,11 +130,13 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_CLOSE:
 			close(f->R.rdi);
 			break;
-
+#ifndef VM
 		case SYS_DUP2:
 			f->R.rax = dup2(f->R.rdi,f->R.rsi);
 			break;
+#endif
 	}
+
 }
 
 void check_addr(void *addr){
@@ -139,6 +149,21 @@ void check_addr(void *addr){
 	}
 #endif
 }
+
+#ifdef VM
+void check_invalid_write(void *addr){
+	if (addr <= USER_STACK && addr >= USER_STACK - (1<<20)){
+		return;
+	}
+	struct page *page = spt_find_page(&thread_current()->spt,addr);
+	if(page == NULL){
+		exit(-1);
+	}
+	else if(page->writable == false){
+		exit(-1);
+	}
+}
+#endif
 
 int open(const char *file_name){
 	check_addr(file_name);
@@ -193,7 +218,9 @@ int write(int fd, void *buffer, unsigned size){
 	if(fd < 1){
 		return -1;
 	}
-	
+// #ifdef VM
+// 	check_invalid_write(buffer);
+// #endif
 	if(curr->fdt[fd] == NULL){
 		return -1;
 	}
@@ -241,6 +268,9 @@ int filesize(int fd){
 
 int read(int fd, void *buffer, unsigned size){
 	check_addr(buffer);
+#ifdef VM
+	check_invalid_write(buffer);
+#endif
 	struct thread *curr = thread_current ();
 	if (fd == 0){
 		int read_size = strlen(input_getc());
@@ -280,7 +310,7 @@ unsigned tell (int fd){
 		return -1; // 어떻게 예외처리?
 	}
 }
-
+#ifndef VM
 void close (int fd){
 	struct thread *curr = thread_current ();
 	struct file *closing_file = curr->fdt[fd];
@@ -322,3 +352,16 @@ int dup2(int oldfd, int newfd){
 
 	return newfd;
 }
+#else
+void close (int fd){
+	struct thread *curr = thread_current ();
+	if (fd < 2){
+		return;
+	}
+	struct file *closing_file = curr->fdt[fd];
+	if(closing_file != NULL){
+		file_close(curr->fdt[fd]);
+		curr->fdt[fd] = NULL;
+	}
+}
+#endif

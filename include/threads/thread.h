@@ -112,8 +112,7 @@ struct thread {
 
 	/* file descripter 멤버 */
 	struct file **fdt;
-	struct file **fdt_dup;
-	int next_dup;
+	
 	int next_fd;
 
 	struct intr_frame parent_if;
@@ -130,13 +129,17 @@ struct thread {
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-
+#endif
+#ifndef VM
+	struct file **fdt_dup;
+	int next_dup;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
+	void *stack_bottom;
+	void *curr_rsp;
 #endif
-
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
