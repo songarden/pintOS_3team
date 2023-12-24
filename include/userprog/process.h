@@ -18,6 +18,7 @@ struct load_info {
     size_t page_zero_bytes;
     off_t ofs;
 };
+bool
+lazy_load_segment (struct page *page, void *aux);
 #endif
-
 #endif /* userprog/process.h */

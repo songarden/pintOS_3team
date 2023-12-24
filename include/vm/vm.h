@@ -95,6 +95,9 @@ struct supplemental_page_table {
 #include "userprog/syscall.h"
 #include "include/threads/mmu.h"
 #include "string.h"
+#include "threads/malloc.h"
+#include "lib/round.h"
+
 
 void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,

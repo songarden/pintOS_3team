@@ -36,6 +36,9 @@ unsigned tell (int fd);
 void close (int fd);
 #ifndef VM
 int dup2(int oldfd, int newfd);
+#else
+void munmap (void *addr);
+void * mmap (void *addr, size_t length, int writable, int fd, off_t offset);
 #endif
 
 /* System call.
@@ -134,9 +137,15 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_DUP2:
 			f->R.rax = dup2(f->R.rdi,f->R.rsi);
 			break;
-#endif
+#else
+		case SYS_MMAP:
+			f->R.rax = mmap(f->R.rdi,f->R.rsi,f->R.rdx,f->R.r10,f->R.r8);
+			break;
+		case SYS_MUNMAP:
+			munmap(f->R.rdi);
+			break;
 	}
-
+#endif
 }
 
 void check_addr(void *addr){
@@ -364,4 +373,40 @@ void close (int fd){
 		curr->fdt[fd] = NULL;
 	}
 }
+
+void *
+mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	check_addr(addr);
+	if(offset % PGSIZE != 0){
+		return NULL;
+	}
+	struct thread *curr = thread_current ();
+	if(fd < 2){
+		return NULL;
+	}
+	if(curr->fdt[fd] == NULL){
+		return NULL;
+	}
+	lock_acquire(&filesys_lock);
+	struct file *file = curr->fdt[fd];
+	if (file_length(file) == 0 || file_length(file) <= offset){
+		lock_release(&filesys_lock);
+		return NULL;
+	}
+	if (length == 0){
+		return NULL;
+	}
+	void* mmap_addr = do_mmap(addr,length,writable,file,offset);
+	lock_release(&filesys_lock);
+
+	return mmap_addr;
+}
+
+void
+munmap (void *addr) {
+	check_addr(addr);
+	check_invalid_write(addr);
+	do_munmap(addr);
+}
+
 #endif

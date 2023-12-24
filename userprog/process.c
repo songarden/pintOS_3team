@@ -789,7 +789,7 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-static bool
+bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
@@ -854,8 +854,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		load_info->page_zero_bytes = page_zero_bytes;
 		load_info->ofs = ofs;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, load_info))
+					writable, lazy_load_segment, load_info)){
+			free(load_info);
 			return false;
+			}
+			
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
