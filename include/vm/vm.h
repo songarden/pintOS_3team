@@ -89,7 +89,6 @@ struct page_operations {
  * All designs up to you for this. */
 struct supplemental_page_table {
 	struct hash pages;
-	struct semaphore hash_sema;
 };
 
 #include "threads/thread.h"

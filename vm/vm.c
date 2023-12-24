@@ -261,7 +261,6 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 		printf("빡종");
 		exit(-1);
 	}
-	sema_init(&curr->spt.hash_sema,1);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -301,9 +300,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	sema_down(&spt->hash_sema);
 	hash_clear(&spt->pages,hash_action_free);
-	sema_up(&spt->hash_sema);
 }
 
 void hash_action_free (struct hash_elem *e,void *aux){

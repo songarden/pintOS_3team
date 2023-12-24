@@ -11,12 +11,13 @@ void process_exit (void);
 void process_activate (struct thread *next);
 int process_add_fd(struct file *f);
 
+#ifdef VM
 struct load_info {
     struct file *file;
     size_t page_read_bytes;
     size_t page_zero_bytes;
     off_t ofs;
 };
-
+#endif
 
 #endif /* userprog/process.h */

@@ -31,7 +31,7 @@ static void __do_fork (void *);
 struct thread *process_get_child(tid_t child_tid);
 
 static void start_process (void* file_name_);
-static void parsing_file_input(char *file_name, struct intr_frame *if_);
+static void parsing_file_input(char *f_name, struct intr_frame *if_);
 
 /* General process initializer for initd and other process. */
 static void
@@ -369,12 +369,11 @@ process_exit (void) {
 	// 		sema_up(&waiting_child->exit_sema);
 	// 	}
 	// }
-	sema_down(&curr->exit_sema);
 	process_cleanup ();
+	sema_down(&curr->exit_sema);
 #ifdef VM
 	hash_destroy(&curr->spt.pages,hash_action_free);
 #endif
-	
 }
 
 /* Free the current process's resources. */
@@ -609,12 +608,7 @@ done:
 	return success;
 }
 
-static void parsing_file_input(char *file_name, struct intr_frame *if_){
-	char *f_name;
-	f_name = palloc_get_page(PAL_USER|PAL_ZERO);
-	if (f_name == NULL)
-		return TID_ERROR;
-	strlcpy (f_name, file_name, PGSIZE);
+static void parsing_file_input(char *f_name, struct intr_frame *if_){
 	char *token, *save_ptr;
 	int var_cnt = 0;
 	uintptr_t *address[128];
@@ -644,7 +638,6 @@ static void parsing_file_input(char *file_name, struct intr_frame *if_){
 	if_->R.rdi = var_cnt;
 	
 	if_->rsp -= sizeof(void *);
-	palloc_free_page(f_name);
 }
 
 
