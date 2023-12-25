@@ -219,6 +219,10 @@ void halt(void){
 int write(int fd, void *buffer, unsigned size){
 	check_addr(buffer);
 
+#ifdef VM
+	check_invalid_write(buffer);
+#endif
+
 	struct thread *curr = thread_current();
 	if (fd == 1){
 		putbuf((char*)buffer,(size_t)size);
@@ -227,9 +231,7 @@ int write(int fd, void *buffer, unsigned size){
 	if(fd < 1){
 		return -1;
 	}
-// #ifdef VM
-// 	check_invalid_write(buffer);
-// #endif
+
 	if(curr->fdt[fd] == NULL){
 		return -1;
 	}
@@ -295,7 +297,6 @@ int read(int fd, void *buffer, unsigned size){
 	struct file *file = curr->fdt[fd];
 	int read_size = (int)file_read(file,buffer,(off_t)size);
 	lock_release(&filesys_lock);
-
 	return read_size;
 }
 
@@ -362,6 +363,7 @@ int dup2(int oldfd, int newfd){
 	return newfd;
 }
 #else
+
 void close (int fd){
 	struct thread *curr = thread_current ();
 	if (fd < 2){
@@ -376,7 +378,9 @@ void close (int fd){
 
 void *
 mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
-	check_addr(addr);
+	if(!is_user_vaddr(addr) || addr == NULL){
+		return NULL;
+	}
 	if(offset % PGSIZE != 0){
 		return NULL;
 	}
@@ -389,7 +393,7 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 	}
 	lock_acquire(&filesys_lock);
 	struct file *file = curr->fdt[fd];
-	if (file_length(file) == 0 || file_length(file) <= offset){
+	if (file_length(file) == 0 ){
 		lock_release(&filesys_lock);
 		return NULL;
 	}
@@ -405,7 +409,6 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 void
 munmap (void *addr) {
 	check_addr(addr);
-	check_invalid_write(addr);
 	do_munmap(addr);
 }
 

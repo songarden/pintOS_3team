@@ -5,6 +5,7 @@
 #include "vm/inspect.h"
 #include "userprog/process.h"
 #include "threads/vaddr.h"
+#include "include/lib/stdio.h"
 
 bool
 page_less (const struct hash_elem *a_,const struct hash_elem *b_, void *aux UNUSED);
@@ -206,11 +207,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		}
 	}
 	
-	
 	page = spt_find_page(spt,addr);
 	if(page == NULL){
-		return false;
+		exit(-1);
 	}
+	// printf("page_fault %p\n",addr);
 	return vm_do_claim_page (page);
 }
 

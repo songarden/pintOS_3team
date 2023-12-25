@@ -18,6 +18,9 @@
         "main.h": "c",
         "stdio.h": "c",
         "syscall-nr.h": "c",
-        "synch.h": "c"
+        "synch.h": "c",
+        "*.inc": "c",
+        "anon.h": "c",
+        "file.h": "c"
     }
 }

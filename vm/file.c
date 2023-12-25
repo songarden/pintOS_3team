@@ -2,9 +2,11 @@
 
 #include "vm/vm.h"
 #include "include/userprog/process.h"
+#include "include/lib/stdio.h"
+#include "vm/file.h"
 
 static bool
-load_file_page (struct file *file, off_t ofs, uint8_t *upage,
+load_file_page (struct file *file_origin, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 
 static bool file_backed_swap_in (struct page *page, void *kva);
@@ -31,7 +33,13 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &file_ops;
 	struct load_info *load_info = &page->uninit.aux;
 	struct file_page *file_page = &page->file;
-	file_page->file_info = load_info;
+	if(type & VM_MARKER_1){
+		file_page->is_file_head = true;
+	}
+	else{
+		file_page->is_file_head = false;
+	}
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -50,17 +58,17 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct thread *curr = thread_current();
-	struct file_page *file_page UNUSED = &page->file;
-	struct load_info *file_info = file_page->file_info;
-	if(pml4_is_dirty(curr->pml4,page->va)){
+	struct file_page *file_page = &page->file;
+	if(pml4_is_dirty(curr->pml4,page->va) && file_page->page_read_bytes > 0){
 		lock_acquire(&filesys_lock);
-		file_write_at(file_info->file,page->frame->kva,file_info->page_read_bytes,file_info->ofs);
+		file_write_at(file_page->file,page->frame->kva,file_page->page_read_bytes,file_page->ofs);
 		lock_release(&filesys_lock);
 		pml4_set_dirty(curr->pml4,page->va,0);
 	}
-	free(file_info);
-	free(page->frame);
+	file_close(file_page->file);
+	palloc_free_page(page->frame->kva);
 	pml4_clear_page(curr->pml4,page->va);
+	free(page->frame);
 }
 
 /* Do the mmap */
@@ -68,8 +76,8 @@ void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
 	struct thread *curr = thread_current();
+	
 	if(addr != pg_round_down(addr)){
-		printf("not aligned addr\n");
 		return NULL;
 	}
 	if(addr == NULL){
@@ -77,7 +85,6 @@ do_mmap (void *addr, size_t length, int writable,
 		return NULL;
 	}
 	if(addr <= USER_STACK && addr >= curr->stack_bottom){
-		printf("This is stack area\n");
 		return NULL;
 	}
 
@@ -88,13 +95,13 @@ do_mmap (void *addr, size_t length, int writable,
 			check_addr += PGSIZE;
 		}
 		else{
-			printf("파일 맵 할 블록 중 곂치는 페이지가 있음\n");
 			return NULL;
 		}
-	}while(check_addr > addr + length);
-	size_t read_bytes = offset + length;
-	size_t zero_bytes = (ROUND_UP (offset + length, PGSIZE)- read_bytes);
-	if(!load_file_page(file,offset,addr,read_bytes,zero_bytes,writable)){
+	}while(check_addr < addr + length);
+
+	size_t read_bytes = length>(file_length(file)-offset)?file_length(file)-offset:length;
+	size_t zero_bytes = length>(file_length(file)-offset)?length-(file_length(file)-offset):ROUND_UP(read_bytes,PGSIZE)-read_bytes;
+	if(load_file_page(file,offset,addr,read_bytes,zero_bytes,writable)){
 		return addr;
 	}
 	else{
@@ -103,38 +110,54 @@ do_mmap (void *addr, size_t length, int writable,
 }
 
 static bool
-load_file_page (struct file *file, off_t ofs, uint8_t *upage,
+load_file_page (struct file *file_origin, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
-	file_seek (file, ofs);
+	void *start_upage = upage;
+	// int i=0;
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		struct file *file = file_reopen(file_origin);
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		struct load_info *load_info = (struct load_info *)malloc(sizeof(struct load_info));
 		if(load_info == NULL){
+			file_close(file);
 			return false;
 		}
 		load_info->file = file;
 		load_info->page_read_bytes = page_read_bytes;
 		load_info->page_zero_bytes = page_zero_bytes;
 		load_info->ofs = ofs;
-		if(!vm_alloc_page_with_initializer(VM_FILE,upage,writable,lazy_load_segment,load_info)){
-			free(load_info);
-			return false;
+		//mmap 요청 시작 주소의 페이지에 마킹해두기
+		if(start_upage == upage){
+			if(!vm_alloc_page_with_initializer(VM_FILE|VM_MARKER_1,upage,writable,lazy_load_file_segment,load_info)){
+				file_close(file);
+				free(load_info);
+				return false;
+			}
 		}
+		else{
+			if(!vm_alloc_page_with_initializer(VM_FILE,upage,writable,lazy_load_file_segment,load_info)){
+				file_close(file);
+				free(load_info);
+				return false;
+			}
+		}
+		
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 		ofs += page_read_bytes;
+		// i++;
+		// printf("i : %d\n read_bytes : %d\n",i,read_bytes);
 	}
 	return true;
 }
@@ -148,17 +171,26 @@ lazy_load_file_segment (struct page *page, void *aux) {
 	uint8_t *kpage = page->frame->kva;
 	struct file *file = load_info->file;
 	size_t page_read_bytes = load_info->page_read_bytes;
+	// printf("%d\n",page_read_bytes);
 	size_t page_zero_bytes = load_info->page_zero_bytes;
 	off_t ofs = load_info->ofs;
-	
-	file_seek(file,ofs);
-	/* Load this page. */
-	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+	if(page_read_bytes > 0){
+		if (file_read_at (file, kpage, page_read_bytes,ofs) != (int) page_read_bytes) {
 		palloc_free_page (kpage);
 		free(load_info);
 		return false;
 	}
+	}
+	/* Load this page. */
+	
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
+	pml4_set_dirty(thread_current()->pml4,page->va,0);
+	struct file_page *file_page = &page->file;
+	file_page->file = file;
+	file_page->page_read_bytes = page_read_bytes;
+	file_page->page_zero_bytes = page_zero_bytes;
+	file_page->ofs = ofs;
+	free(load_info);
 
 	return true; 
 }
@@ -166,13 +198,31 @@ lazy_load_file_segment (struct page *page, void *aux) {
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+	// int i = 0;
 	struct thread *curr = thread_current();
 	struct page *page = spt_find_page(&curr->spt,addr);
 	if(page == NULL){
 		return;
 	}
-	if(page->operations->type != VM_FILE){
+	if(page_get_type(page) != VM_FILE){
 		return;
 	}
-	spt_remove_page(&curr->spt,page);
+	if(page->file.is_file_head == false){
+		return;
+	}
+	do{
+		struct hash_elem *deleting_hash = &page->spt_elem;
+		if(hash_delete(&curr->spt.pages,&page->spt_elem) != deleting_hash){
+			return;
+		}
+		spt_remove_page(&curr->spt,page);
+		addr += PGSIZE;
+		page = spt_find_page(&curr->spt,addr);
+		if(page == NULL){
+			return;
+		}
+		// printf("type :%d\n is_file_head:%d\n",page->operations->type,page->file.is_file_head);
+		// i++;
+	}while((page_get_type(page) == VM_FILE && page->file.is_file_head == false) || (page->operations->type == VM_UNINIT && page->uninit.type == VM_FILE));
+	// printf("%d\n",i);
 }

@@ -82,14 +82,14 @@
                 "--fs-disk=10",
                 "--swap-disk=4",
                 "-p",
-                "tests/userprog/fork-read:fork-read",
+                "tests/vm/mmap-clean:mmap-clean",
                 "-p",
-                "../../tests/userprog/sample.txt:sample.txt",
+                "../../tests/vm/sample.txt:sample.txt",
                 "--",
                 "-q",
                 "-f",
                 "run",
-                "fork-read ${input:args}"
+                "mmap-clean ${input:args}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"
