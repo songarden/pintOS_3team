@@ -21,6 +21,7 @@
         "synch.h": "c",
         "*.inc": "c",
         "anon.h": "c",
-        "file.h": "c"
+        "file.h": "c",
+        "bitmap.h": "c"
     }
 }

@@ -33,12 +33,7 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &file_ops;
 	struct load_info *load_info = &page->uninit.aux;
 	struct file_page *file_page = &page->file;
-	if(type & VM_MARKER_1){
-		file_page->is_file_head = true;
-	}
-	else{
-		file_page->is_file_head = false;
-	}
+	file_page->type = type;
 	return true;
 }
 
@@ -101,6 +96,7 @@ do_mmap (void *addr, size_t length, int writable,
 
 	size_t read_bytes = length>(file_length(file)-offset)?file_length(file)-offset:length;
 	size_t zero_bytes = length>(file_length(file)-offset)?length-(file_length(file)-offset):ROUND_UP(read_bytes,PGSIZE)-read_bytes;
+
 	if(load_file_page(file,offset,addr,read_bytes,zero_bytes,writable)){
 		return addr;
 	}
@@ -150,14 +146,11 @@ load_file_page (struct file *file_origin, off_t ofs, uint8_t *upage,
 			}
 		}
 		
-
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 		ofs += page_read_bytes;
-		// i++;
-		// printf("i : %d\n read_bytes : %d\n",i,read_bytes);
 	}
 	return true;
 }
@@ -171,7 +164,6 @@ lazy_load_file_segment (struct page *page, void *aux) {
 	uint8_t *kpage = page->frame->kva;
 	struct file *file = load_info->file;
 	size_t page_read_bytes = load_info->page_read_bytes;
-	// printf("%d\n",page_read_bytes);
 	size_t page_zero_bytes = load_info->page_zero_bytes;
 	off_t ofs = load_info->ofs;
 	if(page_read_bytes > 0){
@@ -182,7 +174,6 @@ lazy_load_file_segment (struct page *page, void *aux) {
 	}
 	}
 	/* Load this page. */
-	
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 	pml4_set_dirty(thread_current()->pml4,page->va,0);
 	struct file_page *file_page = &page->file;
@@ -207,7 +198,10 @@ do_munmap (void *addr) {
 	if(page_get_type(page) != VM_FILE){
 		return;
 	}
-	if(page->file.is_file_head == false){
+	if(page->operations->type == VM_UNINIT && page->uninit.type != (VM_FILE|VM_MARKER_1)){
+		return;
+	}
+	if(page->file.type != (VM_FILE|VM_MARKER_1)){
 		return;
 	}
 	do{
@@ -221,8 +215,5 @@ do_munmap (void *addr) {
 		if(page == NULL){
 			return;
 		}
-		// printf("type :%d\n is_file_head:%d\n",page->operations->type,page->file.is_file_head);
-		// i++;
-	}while((page_get_type(page) == VM_FILE && page->file.is_file_head == false) || (page->operations->type == VM_UNINIT && page->uninit.type == VM_FILE));
-	// printf("%d\n",i);
+	}while((page->operations->type == VM_FILE && page->file.type == VM_FILE) || (page->operations->type == VM_UNINIT && page->uninit.type == VM_FILE));
 }

@@ -7,6 +7,10 @@
 #include "threads/vaddr.h"
 #include "include/lib/stdio.h"
 
+
+
+
+
 bool
 page_less (const struct hash_elem *a_,const struct hash_elem *b_, void *aux UNUSED);
 
@@ -17,6 +21,8 @@ page_hash (const struct hash_elem *p_, void *aux UNUSED);
  * intialize codes. */
 void
 vm_init (void) {
+	list_init(&frame_list);
+	lock_init(&swap_lock);
 	vm_anon_init ();
 	vm_file_init ();
 #ifdef EFILESYS  /* For project 4 */
@@ -43,7 +49,10 @@ page_get_type (struct page *page) {
 
 /* Helpers */
 static struct frame *vm_get_victim (void);
+static struct page *clock_evict_policy(void);
 static bool vm_do_claim_page (struct page *page);
+static bool
+vm_connect_page_frame(struct page *page);
 static struct frame *vm_evict_frame (void);
 
 /* Create the pending page object with initializer. If you want to create a
@@ -110,6 +119,7 @@ bool
 spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
+	// struct hash_elem *hash_elem;
 	/* TODO: Fill this function. */
 	if((hash_insert(&spt->pages,&page->spt_elem)) == NULL){
 		succ = true;
@@ -126,20 +136,46 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim (void) {
-	struct frame *victim = NULL;
+	struct page *victim_page = clock_evict_policy();
+	list_remove(&victim_page->frame_elem);
+	struct frame *victim = victim_page->frame;
 	 /* TODO: The policy for eviction is up to you. */
-
+	
 	return victim;
+}
+
+static struct page *clock_evict_policy (void) {
+	struct list_elem *elem;
+	struct list_elem *start_elem = clock_buffer_elem;
+	struct page *evict_page = NULL;
+	do{
+		for(elem = start_elem->next;elem != list_end(&frame_list);list_next(elem)){
+			evict_page = list_entry(elem,struct page,frame_elem);
+			if(pml4_is_accessed(evict_page->thread->pml4,evict_page->va)){
+				pml4_set_accessed(evict_page->thread->pml4,evict_page->va,false);
+			}
+			else{
+				clock_buffer_elem = elem != list_begin(&frame_list) ? elem->prev:list_end(&frame_list)->prev;
+				return evict_page;
+			}
+		}
+		start_elem = list_head(&frame_list);
+	}while(true);
+	
 }
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
+	lock_acquire(&swap_lock);
 	struct frame *victim UNUSED = vm_get_victim ();
+	struct page *victim_page = victim->page;
+	void *kva = victim->kva;
 	/* TODO: swap out the victim and return the evicted frame. */
-
-	return NULL;
+	swap_out(victim_page);
+	lock_release(&swap_lock);
+	return kva;
 }
 
 /* palloc() and get frame. If there is no available page, evict(내쫓다) the page
@@ -165,7 +201,8 @@ vm_get_frame (void) {
 static void
 vm_stack_growth (void *addr UNUSED) {
 	struct thread *curr = thread_current();
-	void *new_stack_bottom = (void *) (((uint8_t *) curr->stack_bottom) - PGSIZE);
+	void *new_stack_bottom = curr->stack_bottom;
+	new_stack_bottom -= PGSIZE;
 	if (vm_alloc_page (VM_ANON|VM_MARKER_0,new_stack_bottom,true)){
 		bool success = vm_claim_page(new_stack_bottom);
 		if(success){
@@ -197,21 +234,22 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			return false;
 		}
 	}
-	if((user && addr >= f->rsp-8 )||(!user && addr >= curr->curr_rsp-8 )){
-		if(addr >= USER_STACK - stack_growth_limit + PGSIZE && addr <= USER_STACK){
-			vm_stack_growth(addr);
-			return true;
+	
+	page = spt_find_page(spt,addr);
+	if(page == NULL){
+		if((user && addr >= f->rsp-8 )||(!user && addr >= curr->curr_rsp-8 )){
+			if(curr->stack_bottom >= USER_STACK - stack_growth_limit+PGSIZE && addr <= USER_STACK){
+				vm_stack_growth(addr);
+				return true;
+			}
+			else{
+				return false;
+			}
 		}
 		else{
 			return false;
 		}
 	}
-	
-	page = spt_find_page(spt,addr);
-	if(page == NULL){
-		exit(-1);
-	}
-	// printf("page_fault %p\n",addr);
 	return vm_do_claim_page (page);
 }
 
@@ -235,6 +273,15 @@ vm_claim_page (void *va UNUSED) {
 /* Claim the PAGE and set up the mmu. */
 static bool
 vm_do_claim_page (struct page *page) {
+	if(!vm_connect_page_frame(page)){
+		return false;
+	}
+
+	return swap_in (page, page->frame->kva);
+}
+
+static bool
+vm_connect_page_frame(struct page *page){
 	struct frame *frame = vm_get_frame ();
 	struct thread *curr = thread_current ();
 	if(frame == NULL){
@@ -249,9 +296,7 @@ vm_do_claim_page (struct page *page) {
 		palloc_free_page(frame->kva);
 		return false;
 	}
-
-
-	return swap_in (page, frame->kva);
+	return true;
 }
 
 /* Initialize new supplemental page table */
@@ -281,15 +326,29 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		}
 		memcpy(new_page,cp_page,sizeof(struct page));
 		new_page->frame = NULL;
+		new_page->thread = thread_current();
 		spt_insert_page(dst,new_page);
 		switch(VM_TYPE(cp_type)){
 			case VM_UNINIT:
 				success = uninit_duplicate_aux(cp_page,new_page);
+				if(!success){
+					return false;
+				}
 				break;
 			case VM_ANON:
-				success = vm_do_claim_page(new_page);
+				if(!vm_connect_page_frame(new_page)){
+					return false;
+				}
 				memcpy(new_page->frame->kva,cp_page->frame->kva,PGSIZE);
-
+				break;
+			case VM_FILE:
+				if(!vm_connect_page_frame(new_page)){
+					return false;
+				}
+				memcpy(new_page->frame->kva,cp_page->frame->kva,PGSIZE);
+				struct file *reopen_file = file_reopen(&cp_page->file.file);
+				struct file_page *file_page = &new_page->file;
+				file_page->file = reopen_file;
 				break;
 		}
 	}

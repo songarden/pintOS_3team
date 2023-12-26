@@ -5,6 +5,7 @@
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
+static struct bitmap *swap_table;
 static bool anon_swap_in (struct page *page, void *kva);
 static bool anon_swap_out (struct page *page);
 static void anon_destroy (struct page *page);
@@ -21,7 +22,8 @@ static const struct page_operations anon_ops = {
 void
 vm_anon_init (void) {
 	/* TODO: Set up the swap_disk. */
-	swap_disk = NULL;
+	swap_disk = disk_get(1,1);
+	swap_table = bitmap_create(disk_size(swap_disk)/8);
 }
 
 /* Initialize the file mapping */
@@ -37,6 +39,8 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	else{
 		anon_page->is_stack = false;
 	}
+
+	anon_page->type = type;
 		
 }
 
@@ -44,6 +48,25 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
+	if(!(anon_page->type & VM_SWAP)){
+		return false;
+	}
+	if(anon_page->swap_idx < 0){
+		return false;
+	}
+	size_t swap_idx = anon_page->swap_idx;
+	enum vm_type type = anon_page->type;
+	page->frame->kva = kva;
+	for(size_t i = swap_idx*8; i<swap_idx*8+8; i++){
+		disk_read(swap_disk,i,kva);
+		kva += 512;
+	}
+	anon_page->type = (type & ~VM_SWAP);
+	anon_page->swap_idx = -1;
+	bitmap_reset(swap_table,swap_idx);
+
+	list_push_back(&frame_list,&page->frame_elem);
+	clock_buffer_elem = &page->frame_elem;
 	return true;
 }
 
@@ -51,6 +74,25 @@ anon_swap_in (struct page *page, void *kva) {
 static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	if(anon_page->type & VM_SWAP){
+		return false;
+	}
+	if(anon_page->swap_idx != -1){
+		return false;
+	}
+	size_t swap_idx = bitmap_scan_and_flip(swap_table,0,1,false);
+	void *kva = page->frame->kva;
+	enum vm_type type = anon_page->type;
+	for(size_t i = swap_idx*8;i<swap_idx*8+8;i++){
+		disk_write(swap_disk,i,kva);
+		kva += 512;
+	}
+	page->frame->kva = NULL;
+	anon_page->type = (VM_SWAP|type);
+	anon_page->swap_idx = (int)swap_idx;
+	pml4_clear_page(thread_current()->pml4,page->va);
+	list_remove(&page->frame_elem);
+	return true;
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */

@@ -2,6 +2,13 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/bitmap.h"
+#include "threads/synch.h"
+
+struct list frame_list;
+struct list_elem *clock_buffer_elem;
+
+struct lock swap_lock;
 
 enum vm_type {
 	/* page not initialized */
@@ -17,8 +24,13 @@ enum vm_type {
 
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
+
+	/* this marker indicates stack page */
 	VM_MARKER_0 = (1 << 3),
+	/* this marker indicates mmap memory head */
 	VM_MARKER_1 = (1 << 4),
+	/* this marker indicates the page which is located in swap disk */
+	VM_SWAP = (1 << 5),
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -28,7 +40,6 @@ enum vm_type {
 #include "vm/anon.h"
 #include "vm/file.h"
 #include "lib/kernel/hash.h"
-#include "threads/synch.h"
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
 #endif
@@ -46,10 +57,12 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-
+	
 	/* Your implementation */
+	struct thread *thread; /* Onwer of this page */
 	struct hash_elem spt_elem;
 	bool writable;
+	struct list_elem frame_elem;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {

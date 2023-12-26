@@ -82,14 +82,14 @@
                 "--fs-disk=10",
                 "--swap-disk=4",
                 "-p",
-                "tests/vm/mmap-clean:mmap-clean",
+                "tests/vm/mmap-unmap:mmap-unmap",
                 "-p",
                 "../../tests/vm/sample.txt:sample.txt",
                 "--",
                 "-q",
                 "-f",
                 "run",
-                "mmap-clean ${input:args}"
+                "mmap-unmap ${input:args}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"
