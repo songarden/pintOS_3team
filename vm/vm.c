@@ -6,6 +6,7 @@
 #include "userprog/process.h"
 #include "threads/vaddr.h"
 #include "include/lib/stdio.h"
+#include "devices/timer.h"
 
 
 
@@ -137,7 +138,6 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 static struct frame *
 vm_get_victim (void) {
 	struct page *victim_page = clock_evict_policy();
-	list_remove(&victim_page->frame_elem);
 	struct frame *victim = victim_page->frame;
 	 /* TODO: The policy for eviction is up to you. */
 	
@@ -168,13 +168,11 @@ static struct page *clock_evict_policy (void) {
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
-	lock_acquire(&swap_lock);
 	struct frame *victim UNUSED = vm_get_victim ();
 	struct page *victim_page = victim->page;
 	void *kva = victim->kva;
 	/* TODO: swap out the victim and return the evicted frame. */
 	swap_out(victim_page);
-	lock_release(&swap_lock);
 	return kva;
 }
 
@@ -273,11 +271,14 @@ vm_claim_page (void *va UNUSED) {
 /* Claim the PAGE and set up the mmu. */
 static bool
 vm_do_claim_page (struct page *page) {
+	lock_acquire(&swap_lock);
 	if(!vm_connect_page_frame(page)){
 		return false;
 	}
-
-	return swap_in (page, page->frame->kva);
+	struct frame *frame =page->frame;
+	bool success = swap_in (page, frame->kva);
+	lock_release(&swap_lock);
+	return success;
 }
 
 static bool
@@ -336,16 +337,21 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				}
 				break;
 			case VM_ANON:
-				if(!vm_connect_page_frame(new_page)){
-					return false;
+				if(!(cp_type & VM_SWAP)){
+					if(!vm_connect_page_frame(new_page)){
+						return false;
+					}
+					memcpy(new_page->frame->kva,cp_page->frame->kva,PGSIZE);
 				}
-				memcpy(new_page->frame->kva,cp_page->frame->kva,PGSIZE);
+				new_page->anon.fork_cnt += 1;
 				break;
 			case VM_FILE:
-				if(!vm_connect_page_frame(new_page)){
-					return false;
+				if(!(cp_type & VM_DISK)){
+					if(!vm_connect_page_frame(new_page)){
+						return false;
+					}
+					memcpy(new_page->frame->kva,cp_page->frame->kva,PGSIZE);
 				}
-				memcpy(new_page->frame->kva,cp_page->frame->kva,PGSIZE);
 				struct file *reopen_file = file_reopen(&cp_page->file.file);
 				struct file_page *file_page = &new_page->file;
 				file_page->file = reopen_file;
@@ -365,7 +371,9 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 
 void hash_action_free (struct hash_elem *e,void *aux){
 	struct page *page = hash_entry(e,struct page,spt_elem);
+	lock_acquire(&swap_lock);
 	vm_dealloc_page(page);
+	lock_release(&swap_lock);
 }
 
 
@@ -384,5 +392,17 @@ page_less (const struct hash_elem *a_,
   const struct page *b = hash_entry (b_, struct page, spt_elem);
 
   return a->va < b->va;
+}
+
+void vm_remove_frame(struct page *page){
+	if(clock_buffer_elem == &page->frame_elem){
+		if(list_begin(&frame_list) == &page->frame_elem){
+			clock_buffer_elem = list_end(&frame_list)->prev;
+		}
+		else{
+			clock_buffer_elem = clock_buffer_elem->prev;
+		}
+	}
+	list_remove(&page->frame_elem);
 }
 

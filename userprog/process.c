@@ -248,7 +248,6 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
-	
 
 	char *save_ptr;
 	char *f_copy;
@@ -259,15 +258,18 @@ process_exec (void *f_name) {
 	
 	f_copy = strtok_r(f_copy," ",&save_ptr);
 	/* And then load the binary */
+	lock_acquire(&filesys_lock);
 	success = load (f_copy, &_if);
-	
+	lock_release(&filesys_lock);
 	/* If load failed, quit. */
 	palloc_free_page (f_copy);
 	if (!success){
 		palloc_free_page (file_name);
 		return -1;
-	}	
+	}
+	lock_acquire(&swap_lock);
 	parsing_file_input(file_name,&_if); //file이 있는 경우에만 parsing하도록
+	lock_release(&swap_lock);
 	// hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
 #ifdef VM
 	thread_current()->curr_rsp = (void*)_if.rsp;
@@ -369,6 +371,7 @@ process_exit (void) {
 	// 		sema_up(&waiting_child->exit_sema);
 	// 	}
 	// }
+	sema_up(&curr->child_wait_sema);
 	process_cleanup ();
 	sema_down(&curr->exit_sema);
 #ifdef VM
@@ -515,7 +518,6 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 	/* Open executable file. */
-	lock_acquire(&filesys_lock);
 	file = filesys_open (file_name);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
@@ -603,7 +605,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	success = true;
 
 done:
-	lock_release(&filesys_lock);
 	/* We arrive here whether the load is successful or not. */
 	return success;
 }

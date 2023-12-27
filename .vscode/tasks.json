@@ -82,14 +82,12 @@
                 "--fs-disk=10",
                 "--swap-disk=4",
                 "-p",
-                "tests/vm/mmap-unmap:mmap-unmap",
-                "-p",
-                "../../tests/vm/sample.txt:sample.txt",
+                "tests/vm/swap-anon:swap-anon",
                 "--",
                 "-q",
                 "-f",
                 "run",
-                "mmap-unmap ${input:args}"
+                "swap-anon ${input:args}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

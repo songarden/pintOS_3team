@@ -33,15 +33,12 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 	
 	struct anon_page *anon_page = &page->anon;
-	if(type & VM_MARKER_0){
-		anon_page->is_stack = true;
-	}
-	else{
-		anon_page->is_stack = false;
-	}
 
 	anon_page->type = type;
-		
+	anon_page->fork_cnt = 0;
+	anon_page->swap_idx = -1;
+	list_push_back(&frame_list,&page->frame_elem);
+	clock_buffer_elem = &page->frame_elem;
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -63,8 +60,12 @@ anon_swap_in (struct page *page, void *kva) {
 	}
 	anon_page->type = (type & ~VM_SWAP);
 	anon_page->swap_idx = -1;
-	bitmap_reset(swap_table,swap_idx);
-
+	if(anon_page->fork_cnt > 0){
+		anon_page->fork_cnt--;
+	}
+	else{
+		bitmap_reset(swap_table,swap_idx);
+	}
 	list_push_back(&frame_list,&page->frame_elem);
 	clock_buffer_elem = &page->frame_elem;
 	return true;
@@ -75,23 +76,32 @@ static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 	if(anon_page->type & VM_SWAP){
+		exit(-4);
 		return false;
 	}
 	if(anon_page->swap_idx != -1){
+		exit(-3);
 		return false;
 	}
 	size_t swap_idx = bitmap_scan_and_flip(swap_table,0,1,false);
+	if(swap_idx == BITMAP_ERROR){
+		exit(-2);
+		return false;
+	}
 	void *kva = page->frame->kva;
 	enum vm_type type = anon_page->type;
 	for(size_t i = swap_idx*8;i<swap_idx*8+8;i++){
 		disk_write(swap_disk,i,kva);
 		kva += 512;
 	}
-	page->frame->kva = NULL;
-	anon_page->type = (VM_SWAP|type);
 	anon_page->swap_idx = (int)swap_idx;
+
+	page->frame->kva = NULL;
 	pml4_clear_page(thread_current()->pml4,page->va);
-	list_remove(&page->frame_elem);
+
+	vm_remove_frame(page);
+	anon_page->type = (VM_SWAP|type);
+	
 	return true;
 }
 
@@ -99,5 +109,20 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	if(anon_page->type & VM_SWAP){
+		int swap_idx = anon_page->swap_idx;
+		if(swap_idx < 0){
+			exit(-12);
+		}
+		if(anon_page->fork_cnt > 0){
+			anon_page->fork_cnt--;
+		}
+		else{
+			bitmap_reset(swap_table,swap_idx);
+		}
+	}
+	else{
+		vm_remove_frame(page);
+	}
 	free(page->frame);
 }

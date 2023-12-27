@@ -31,6 +31,9 @@ enum vm_type {
 	VM_MARKER_1 = (1 << 4),
 	/* this marker indicates the page which is located in swap disk */
 	VM_SWAP = (1 << 5),
+	/* this marker indicates the page which is located in file disk */
+	VM_DISK = (1 << 6),
+
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -110,7 +113,7 @@ struct supplemental_page_table {
 #include "string.h"
 #include "threads/malloc.h"
 #include "lib/round.h"
-
+void vm_remove_frame(struct page *page);
 
 void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,

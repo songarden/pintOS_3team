@@ -57,7 +57,6 @@ void * mmap (void *addr, size_t length, int writable, int fd, off_t offset);
 void
 syscall_init (void) {
 	lock_init(&filesys_lock);
-
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
 			((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
@@ -219,23 +218,21 @@ void halt(void){
 int write(int fd, void *buffer, unsigned size){
 	check_addr(buffer);
 
-#ifdef VM
-	check_invalid_write(buffer);
-#endif
-
 	struct thread *curr = thread_current();
-	if (fd == 1){
-		putbuf((char*)buffer,(size_t)size);
-		return size;
-	}
 	if(fd < 1){
 		return -1;
 	}
-
+	lock_acquire(&filesys_lock);
+	if (fd == 1){
+		putbuf((char*)buffer,(size_t)size);
+		lock_release(&filesys_lock);
+		return size;
+	}
 	if(curr->fdt[fd] == NULL){
+		lock_release(&filesys_lock);
 		return -1;
 	}
-	lock_acquire(&filesys_lock);
+	
 	int write_size = (int)file_write(curr->fdt[fd],buffer,(off_t)size);
 	lock_release(&filesys_lock);
 	return write_size;
@@ -243,7 +240,9 @@ int write(int fd, void *buffer, unsigned size){
 }
 
 int fork(const char *file, struct intr_frame *f){
+	lock_acquire(&filesys_lock);
 	int fork_pid = process_fork(file,f);
+	lock_release(&filesys_lock);
 	return fork_pid;
 }
 
@@ -282,18 +281,21 @@ int read(int fd, void *buffer, unsigned size){
 #ifdef VM
 	check_invalid_write(buffer);
 #endif
-	struct thread *curr = thread_current ();
-	if (fd == 0){
-		int read_size = strlen(input_getc());
-		return read_size;
-	}
 	if(fd == 1 || fd < 0){
 		return -1;
 	}
+	struct thread *curr = thread_current ();
+	lock_acquire(&filesys_lock);
+	if (fd == 0){
+		int read_size = strlen(input_getc());
+		lock_release(&filesys_lock);
+		return read_size;
+	}
+	
 	if(curr->fdt[fd] == NULL){
+		lock_release(&filesys_lock);
 		return -1;
 	}
-	lock_acquire(&filesys_lock);
 	struct file *file = curr->fdt[fd];
 	int read_size = (int)file_read(file,buffer,(off_t)size);
 	lock_release(&filesys_lock);
@@ -391,17 +393,15 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 	if(curr->fdt[fd] == NULL){
 		return NULL;
 	}
-	lock_acquire(&filesys_lock);
 	struct file *file = curr->fdt[fd];
 	if (file_length(file) == 0 ){
-		lock_release(&filesys_lock);
 		return NULL;
 	}
-	if (length == 0){
+	if (length == 0 || (long)length < 0){
 		return NULL;
 	}
 	void* mmap_addr = do_mmap(addr,length,writable,file,offset);
-	lock_release(&filesys_lock);
+
 
 	return mmap_addr;
 }

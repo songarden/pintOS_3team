@@ -134,7 +134,7 @@ verify (void)
         {
           if (buf2[buf_idx] != hist_idx)
             fail ("bad value %d in byte %zu", buf2[buf_idx], buf_idx);
-          buf_idx++;
+          buf_idx++; 
         }
     }
 

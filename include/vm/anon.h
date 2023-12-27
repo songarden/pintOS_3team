@@ -5,9 +5,9 @@ struct page;
 enum vm_type;
 
 struct anon_page {
-    bool is_stack;
     int swap_idx;
     enum vm_type type;
+    int fork_cnt;
 };
 
 void vm_anon_init (void);

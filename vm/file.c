@@ -34,6 +34,9 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	struct load_info *load_info = &page->uninit.aux;
 	struct file_page *file_page = &page->file;
 	file_page->type = type;
+
+	clock_buffer_elem = &page->frame_elem;
+	list_push_back(&frame_list,&page->frame_elem);
 	return true;
 }
 
@@ -41,28 +44,66 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+	if(!(file_page->type & VM_DISK)){
+		return false;
+	}
+	struct load_info *load_info = (struct load_info *)malloc(sizeof(struct load_info));
+	load_info->file = file_page->file;
+	load_info->page_read_bytes = file_page->page_read_bytes;
+	load_info->page_zero_bytes = file_page->page_zero_bytes;
+	load_info->ofs = file_page->ofs;
+	if(!lazy_load_file_segment(page,load_info)){
+		return false;
+	}
+	pml4_set_accessed(page->thread->pml4,page->va,true);
+	list_push_back(&frame_list,&page->frame_elem);
+	clock_buffer_elem = &page->frame_elem;
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
-}
-
-/* Destory the file backed page. PAGE will be freed by the caller. */
-static void
-file_backed_destroy (struct page *page) {
+	if(file_page->type & VM_DISK){
+		return false;
+	}
 	struct thread *curr = thread_current();
-	struct file_page *file_page = &page->file;
+	lock_release(&swap_lock);
 	if(pml4_is_dirty(curr->pml4,page->va) && file_page->page_read_bytes > 0){
 		lock_acquire(&filesys_lock);
 		file_write_at(file_page->file,page->frame->kva,file_page->page_read_bytes,file_page->ofs);
 		lock_release(&filesys_lock);
 		pml4_set_dirty(curr->pml4,page->va,0);
 	}
+	lock_acquire(&swap_lock);
+	page->frame->kva = NULL;
+	pml4_clear_page(page->thread->pml4,page->va);
+
+	vm_remove_frame(page);
+	file_page->type = (file_page->type | VM_DISK);
+
+	return true;
+}
+
+/* Destory the file backed page. PAGE will be freed by the caller. */
+static void
+file_backed_destroy (struct page *page) {
+	struct file_page *file_page = &page->file;
+	if(!(page->file.type & VM_DISK)){
+		lock_release(&swap_lock);
+		if(pml4_is_dirty(page->thread->pml4,page->va) && file_page->page_read_bytes > 0){
+			lock_acquire(&filesys_lock);
+			file_write_at(file_page->file,page->frame->kva,file_page->page_read_bytes,file_page->ofs);
+			lock_release(&filesys_lock);
+			pml4_set_dirty(page->thread->pml4,page->va,0);
+		}
+		lock_acquire(&swap_lock);
+		palloc_free_page(page->frame->kva);
+		pml4_clear_page(page->thread->pml4,page->va);
+		vm_remove_frame(page);
+	}
 	file_close(file_page->file);
-	palloc_free_page(page->frame->kva);
-	pml4_clear_page(curr->pml4,page->va);
 	free(page->frame);
 }
 
@@ -181,6 +222,7 @@ lazy_load_file_segment (struct page *page, void *aux) {
 	file_page->page_read_bytes = page_read_bytes;
 	file_page->page_zero_bytes = page_zero_bytes;
 	file_page->ofs = ofs;
+	file_page->type = (file_page->type & ~VM_DISK);
 	free(load_info);
 
 	return true; 
@@ -209,7 +251,9 @@ do_munmap (void *addr) {
 		if(hash_delete(&curr->spt.pages,&page->spt_elem) != deleting_hash){
 			return;
 		}
+		lock_acquire(&swap_lock);
 		spt_remove_page(&curr->spt,page);
+		lock_release(&swap_lock);
 		addr += PGSIZE;
 		page = spt_find_page(&curr->spt,addr);
 		if(page == NULL){

@@ -6,6 +6,7 @@
 #include "tests/vm/sample.inc"
 #include "tests/lib.h"
 #include "tests/main.h"
+#include <stdio.h>
 
 void
 test_main (void)
@@ -27,7 +28,6 @@ test_main (void)
   CHECK (write (handle, overwrite, strlen (overwrite))
          == (int) strlen (overwrite),
          "write \"sample.txt\"");
-
   /* Close mapping.  Data should not be written back, because we
      didn't modify it via the mapping. */
   msg ("munmap \"sample.txt\"");
