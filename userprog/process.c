@@ -201,7 +201,6 @@ __do_fork (void *aux) {
 	}
 		
 #endif
-	
 	for (int i = 0; i < FDT_CNT_LIMIT; i++) {
 		if (i<2){
 			current->fdt[i] = i;
