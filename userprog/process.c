@@ -267,9 +267,7 @@ process_exec (void *f_name) {
 		palloc_free_page (file_name);
 		return -1;
 	}
-	lock_acquire(&swap_lock);
 	parsing_file_input(file_name,&_if); //file이 있는 경우에만 parsing하도록
-	lock_release(&swap_lock);
 	// hex_dump(_if.rsp,_if.rsp,USER_STACK-_if.rsp,true);
 #ifdef VM
 	thread_current()->curr_rsp = (void*)_if.rsp;
@@ -838,9 +836,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
-		/* Do calculate how to fill this page.
-		 * We will read PAGE_READ_BYTES bytes from FILE
-		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
@@ -858,9 +853,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			free(load_info);
 			return false;
 			}
-			
 
-		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;

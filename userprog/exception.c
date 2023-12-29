@@ -123,17 +123,9 @@ page_fault (struct intr_frame *f) {
 	bool user;         /* True: access by user, false: access by kernel. */
 	void *fault_addr;  /* Fault address. */
 
-
-	/* Obtain faulting address, the virtual address that was
-	   accessed to cause the fault.  It may point to code or to
-	   data.  It is not necessarily the address of the instruction
-	   that caused the fault (that's f->rip). */
-
 	fault_addr = (void *) rcr2();
 	uintptr_t curr_rsp = f->rsp;
 
-	/* Turn interrupts back on (they were only off so that we could
-	   be assured of reading CR2 before it changed). */
 	intr_enable ();
 
 
@@ -141,7 +133,7 @@ page_fault (struct intr_frame *f) {
 	not_present = (f->error_code & PF_P) == 0;
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
-	
+	page_fault_cnt++;
 
 #ifdef VM
 	/* For project 3 and later. */
@@ -150,7 +142,7 @@ page_fault (struct intr_frame *f) {
 #endif
 	exit(-1);
 	/* Count page faults. */
-	page_fault_cnt++;
+	
 
 	/* If the fault is true fault, show info and exit. */
 	printf ("Page fault at %p: %s error %s page in %s context.\n",

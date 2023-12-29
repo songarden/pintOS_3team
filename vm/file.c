@@ -69,14 +69,12 @@ file_backed_swap_out (struct page *page) {
 		return false;
 	}
 	struct thread *curr = thread_current();
-	lock_release(&swap_lock);
 	if(pml4_is_dirty(curr->pml4,page->va) && file_page->page_read_bytes > 0){
 		lock_acquire(&filesys_lock);
 		file_write_at(file_page->file,page->frame->kva,file_page->page_read_bytes,file_page->ofs);
 		lock_release(&filesys_lock);
 		pml4_set_dirty(curr->pml4,page->va,0);
 	}
-	lock_acquire(&swap_lock);
 	page->frame->kva = NULL;
 	pml4_clear_page(page->thread->pml4,page->va);
 
@@ -91,14 +89,12 @@ static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page = &page->file;
 	if(!(page->file.type & VM_DISK)){
-		lock_release(&swap_lock);
 		if(pml4_is_dirty(page->thread->pml4,page->va) && file_page->page_read_bytes > 0){
 			lock_acquire(&filesys_lock);
 			file_write_at(file_page->file,page->frame->kva,file_page->page_read_bytes,file_page->ofs);
 			lock_release(&filesys_lock);
 			pml4_set_dirty(page->thread->pml4,page->va,0);
 		}
-		lock_acquire(&swap_lock);
 		palloc_free_page(page->frame->kva);
 		pml4_clear_page(page->thread->pml4,page->va);
 		vm_remove_frame(page);
@@ -251,9 +247,9 @@ do_munmap (void *addr) {
 		if(hash_delete(&curr->spt.pages,&page->spt_elem) != deleting_hash){
 			return;
 		}
-		lock_acquire(&swap_lock);
+		sema_down(&swap_sema);
 		spt_remove_page(&curr->spt,page);
-		lock_release(&swap_lock);
+		sema_up(&swap_sema);
 		addr += PGSIZE;
 		page = spt_find_page(&curr->spt,addr);
 		if(page == NULL){

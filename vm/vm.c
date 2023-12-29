@@ -23,7 +23,7 @@ page_hash (const struct hash_elem *p_, void *aux UNUSED);
 void
 vm_init (void) {
 	list_init(&frame_list);
-	lock_init(&swap_lock);
+	sema_init(&swap_sema,1);
 	vm_anon_init ();
 	vm_file_init ();
 #ifdef EFILESYS  /* For project 4 */
@@ -70,9 +70,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	bool (*page_initializer)(struct page*, enum vm_type,void*);
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
-		 * TODO: should modify the field after calling the uninit_new. */
 		struct page *new_page = (struct page *)malloc(sizeof(struct page));
 		
 		if(VM_TYPE(type) == VM_ANON){
@@ -222,8 +219,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct thread *curr = thread_current();
 	struct supplemental_page_table *spt = &curr->spt;
 	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
+
 	if(!not_present){
 		return false;
 	}
@@ -271,13 +267,13 @@ vm_claim_page (void *va UNUSED) {
 /* Claim the PAGE and set up the mmu. */
 static bool
 vm_do_claim_page (struct page *page) {
-	lock_acquire(&swap_lock);
+	sema_down(&swap_sema);
 	if(!vm_connect_page_frame(page)){
 		return false;
 	}
 	struct frame *frame =page->frame;
 	bool success = swap_in (page, frame->kva);
-	lock_release(&swap_lock);
+	sema_up(&swap_sema);
 	return success;
 }
 
@@ -371,9 +367,9 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 
 void hash_action_free (struct hash_elem *e,void *aux){
 	struct page *page = hash_entry(e,struct page,spt_elem);
-	lock_acquire(&swap_lock);
+	sema_down(&swap_sema);
 	vm_dealloc_page(page);
-	lock_release(&swap_lock);
+	sema_up(&swap_sema);
 }
 
 

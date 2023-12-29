@@ -8,7 +8,7 @@
 struct list frame_list;
 struct list_elem *clock_buffer_elem;
 
-struct lock swap_lock;
+struct semaphore swap_sema;
 
 enum vm_type {
 	/* page not initialized */

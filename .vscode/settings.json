@@ -23,6 +23,9 @@
         "anon.h": "c",
         "file.h": "c",
         "bitmap.h": "c",
-        "timer.h": "c"
+        "timer.h": "c",
+        "stdbool.h": "c",
+        "init.h": "c",
+        "pte.h": "c"
     }
 }
